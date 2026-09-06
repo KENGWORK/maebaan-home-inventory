@@ -1,0 +1,1907 @@
+import { useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
+import { PENDING, TODAY, TODAY_ISO, TONE } from "./data";
+import type { Hist, Item, Kind, Loc } from "./data";
+import {
+  applyAdd,
+  applyMove,
+  applyUse,
+  autoCode,
+  days,
+  freshHist,
+  freshItems,
+  freshLocs,
+  homeDerived,
+  itemOf,
+  locLabel as locLabelOf,
+  locSug,
+  shopRows,
+} from "./logic";
+import { css } from "./css";
+import { IOSFrame } from "./IOSFrame";
+import { chip, codeBadge, DANGER, ghost, PRIM, pill, SEC, shot } from "./ui";
+import {
+  BackChevron,
+  ChevronRight,
+  CloseIcon,
+  GearIcon,
+  MicIcon,
+  NavCamIcon,
+  NavHistIcon,
+  NavHomeIcon,
+  NavInvIcon,
+  NavShopIcon,
+  SearchIcon,
+  TrashIcon,
+} from "./icons";
+
+type Screen =
+  | "home"
+  | "pending"
+  | "cam"
+  | "add"
+  | "move"
+  | "use"
+  | "inv"
+  | "hist"
+  | "shop"
+  | "set";
+
+type CamEvt = "ADD" | "MOVE" | "USE";
+
+interface AddRow {
+  name: string;
+  kind: Kind;
+  qty: number;
+  loc: string;
+  locQuery: string;
+  expMode: "days" | "date";
+  expVal: string;
+}
+interface MoveRow {
+  query: string;
+  itemId: number | null;
+  qty: number;
+  to: string;
+  locQuery: string;
+}
+interface Viewer {
+  shots: string[];
+  idx: number;
+  src: string;
+}
+type Sheet =
+  | { kind: "cam" }
+  | { kind: "newItem" }
+  | { kind: "newPlace" }
+  | { kind: "delPlace"; code: string; name: string }
+  | { kind: "delItem"; id: number; name: string }
+  | { kind: "buy"; name: string };
+
+interface State {
+  tone: string | null;
+  screen: Screen;
+  locs: Loc[];
+  setTab: "items" | "places";
+  placeQuery: string;
+  items: Item[];
+  pending: typeof import("./data").PENDING;
+  hist: Hist[];
+  bought: string[];
+  toast: string;
+  sheet: Sheet | null;
+  camShots: string[];
+  camEvt: CamEvt;
+  viewer: Viewer | null;
+  owner: string;
+  addRows: AddRow[];
+  moveRows: MoveRow[];
+  useId: number | null;
+  useQty: number;
+  useQuery: string;
+  invQuery: string;
+  invMode: "all" | "loc" | "item";
+  invLoc: string | null;
+  setQuery: string;
+  sheetText: string;
+  newKind: Kind;
+  placeRoom: string;
+  placeRoomCustom: string;
+  placeCode: string;
+  histMode: "item" | "date" | "loc";
+  histQuery: string;
+  histLoc: string;
+  histFrom: string;
+  histTo: string;
+}
+
+const freshAddRow = (name = ""): AddRow => ({
+  name,
+  kind: "supply",
+  qty: 1,
+  loc: "",
+  locQuery: "",
+  expMode: "days",
+  expVal: "",
+});
+const freshMoveRow = (query = "", itemId: number | null = null): MoveRow => ({
+  query,
+  itemId,
+  qty: 1,
+  to: "",
+  locQuery: "",
+});
+
+const initial = (): State => ({
+  tone: null,
+  screen: "home",
+  locs: freshLocs(),
+  setTab: "items",
+  placeQuery: "",
+  items: freshItems(),
+  pending: PENDING.map((p) => ({ ...p, shots: p.shots.slice() })),
+  hist: freshHist(),
+  bought: [],
+  toast: "",
+  sheet: null,
+  camShots: [],
+  camEvt: "ADD",
+  viewer: null,
+  owner: "เก่ง",
+  addRows: [freshAddRow()],
+  moveRows: [freshMoveRow()],
+  useId: null,
+  useQty: 1,
+  useQuery: "",
+  invQuery: "",
+  invMode: "all",
+  invLoc: null,
+  setQuery: "",
+  sheetText: "",
+  newKind: "supply",
+  placeRoom: "",
+  placeRoomCustom: "",
+  placeCode: "",
+  histMode: "item",
+  histQuery: "",
+  histLoc: "",
+  histFrom: "2026-08-30",
+  histTo: "2026-09-06",
+});
+
+const st = (decl: string): CSSProperties => css(decl);
+
+const HEAD: Record<Screen, [string, string]> = {
+  home: ["", ""],
+  pending: ["รายการรอบันทึก", ""],
+  cam: ["ถ่ายรูปของ", "ขั้นที่ 1 ของทุกการบันทึก"],
+  add: ["เก็บเข้าบ้าน", "ADD · บันทึกได้หลายรายการต่อครั้ง"],
+  move: ["ย้ายของ", "MOVE · เลือกจากของที่มีอยู่"],
+  use: ["ใช้ของ", "USE · ตัดยอดออกจากสต็อก"],
+  inv: ["ของในบ้าน", "ค้นหาตามสถานที่หรือชื่อของ"],
+  hist: ["ประวัติ", "Audit trail ย้อนหลัง"],
+  shop: ["รายการซื้อ", "หมดแล้ว / ใกล้หมด"],
+  set: ["ตั้งค่า", "โทนสี · stock · การแจ้งเตือน"],
+};
+
+export function App() {
+  const [s, setS] = useState<State>(initial);
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  const set = (patch: Partial<State>) => setS((prev) => ({ ...prev, ...patch }));
+  const nav = (screen: Screen) => () => set({ screen, sheet: null });
+  const flash = (t: string) => {
+    set({ toast: t });
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => set({ toast: "" }), 2600);
+  };
+
+  const tone = TONE[s.tone || "lilac"] || TONE.lilac;
+  const locLabel = (code: string) => locLabelOf(s.locs, code);
+  const item = (id: number | null) => itemOf(s.items, id);
+
+  const head = (): [string, string] => {
+    if (s.screen === "home") return [`สวัสดี ${s.owner}`, "ภาพรวมของในบ้าน · 6 ก.ย. 2569"];
+    if (s.screen === "pending")
+      return ["รายการรอบันทึก", `${s.pending.length} รายการ · เลือกรูปเพื่อบันทึกต่อ`];
+    return HEAD[s.screen];
+  };
+
+  // ── flows ──────────────────────────────────────────────────────────────────
+  const startAddFrom = (p: (typeof s.pending)[number]) => () => {
+    set({
+      screen: "add",
+      addRows: [freshAddRow(p.name)],
+      pending: s.pending.filter((x) => x.id !== p.id),
+    });
+    flash(`ดึง “${p.name}” จากรายการรอบันทึกแล้ว`);
+  };
+  const startMoveFrom = (p: (typeof s.pending)[number]) => () => {
+    const match = s.items.find((i) => i.name === p.name);
+    set({
+      screen: "move",
+      moveRows: [freshMoveRow(p.name, match ? match.id : null)],
+      pending: s.pending.filter((x) => x.id !== p.id),
+    });
+  };
+  const startUseFrom = (p: (typeof s.pending)[number]) => () => {
+    const match = s.items.find((i) => i.name === p.name);
+    set({
+      screen: "use",
+      useQuery: p.name,
+      useId: match ? match.id : null,
+      useQty: 1,
+      pending: s.pending.filter((x) => x.id !== p.id),
+    });
+  };
+
+  const addSave = () => {
+    const res = applyAdd(s.items, s.hist, s.addRows, s.owner);
+    if ("error" in res) return flash(res.error);
+    set({
+      items: res.items,
+      hist: res.hist,
+      screen: "inv",
+      invMode: "item",
+      invQuery: "",
+      invLoc: null,
+      addRows: [freshAddRow()],
+    });
+    flash(`บันทึกเก็บของ ${res.added} รายการ โดย ${s.owner}`);
+  };
+  const moveSave = () => {
+    const res = applyMove(
+      s.items,
+      s.hist,
+      s.moveRows.map((r) => ({ itemId: r.itemId, qty: r.qty, to: r.to })),
+      s.owner,
+    );
+    if ("error" in res) return flash(res.error);
+    set({
+      items: res.items,
+      hist: res.hist,
+      screen: "inv",
+      invMode: "loc",
+      invLoc: res.firstTo,
+      moveRows: [freshMoveRow()],
+    });
+    flash(`ย้าย ${res.moved} รายการ โดย ${s.owner}`);
+  };
+  const useSave = () => {
+    const res = applyUse(s.items, s.hist, s.useId, s.useQty, s.owner);
+    if ("error" in res) return flash(res.error);
+    set({ items: res.items, hist: res.hist, useId: null, useQuery: "", useQty: 1 });
+    if (res.left <= 0) flash(`⚠ ${res.name} หมดแล้ว — เพิ่มเข้ารายการซื้ออัตโนมัติ`);
+    else flash(`ใช้ ${res.name} ${res.used} หน่วย · เหลือ ${res.left}`);
+  };
+
+  // ── derived ────────────────────────────────────────────────────────────────
+  const v = useMemo(() => build(s, tone, head, locLabel, item, {
+    startAddFrom,
+    startMoveFrom,
+    startUseFrom,
+    set,
+    flash,
+    nav,
+    onAddSave: addSave,
+    onMoveSave: moveSave,
+    onUseSave: useSave,
+  }), [s]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const h = v.head;
+
+  return (
+    <IOSFrame>
+      <div style={st(`height:100%;filter:${tone.f}`)}>
+        <div style={st("height:100%;display:flex;flex-direction:column;background:linear-gradient(180deg,#F5EFFC 0%,#EDE5F7 100%);position:relative;overflow:hidden")}>
+          {/* header */}
+          <div style={st("padding:56px 22px 10px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex:none")}>
+            <div style={st("min-width:0")}>
+              <div style={st("display:flex;align-items:center;gap:9px")}>
+                {s.screen !== "home" && (
+                  <button onClick={nav("home")} style={st("width:34px;height:34px;flex:none;border:none;border-radius:12px;background:#F8F3FD;box-shadow:4px 5px 12px rgba(120,95,175,.18),-3px -4px 10px #ffffff;cursor:pointer;display:grid;place-items:center")}>
+                    <BackChevron />
+                  </button>
+                )}
+                <div style={st("font:500 24px/1.3 Mitr,sans-serif;color:#3A3254")}>{h[0]}</div>
+              </div>
+              <div style={st("font:400 12.5px/1.45 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:2px")}>{h[1]}</div>
+            </div>
+            <button onClick={nav("set")} style={st("width:46px;height:46px;flex:none;border:none;border-radius:16px;background:#F8F3FD;box-shadow:6px 7px 16px rgba(120,95,175,.2),-5px -6px 14px #ffffff,inset 1px 1px 3px #ffffff;cursor:pointer;display:grid;place-items:center")}>
+              <GearIcon />
+            </button>
+          </div>
+
+          {/* scroll area */}
+          <div style={st("flex:1;overflow-y:auto;padding:8px 22px 140px")}>
+            {s.screen === "home" && <HomeScreen v={v} />}
+            {s.screen === "pending" && <PendingScreen v={v} />}
+            {s.screen === "cam" && <CamScreen v={v} />}
+            {s.screen === "add" && <AddScreen v={v} />}
+            {s.screen === "move" && <MoveScreen v={v} />}
+            {s.screen === "use" && <UseScreen v={v} />}
+            {s.screen === "inv" && <InvScreen v={v} />}
+            {s.screen === "hist" && <HistScreen v={v} />}
+            {s.screen === "shop" && <ShopScreen v={v} />}
+            {s.screen === "set" && <SetScreen v={v} />}
+          </div>
+
+          {/* bottom nav */}
+          <div style={st("position:absolute;left:0;right:0;bottom:0;height:126px;padding:0 16px 30px;display:flex;align-items:flex-end;z-index:40;background:linear-gradient(180deg,rgba(240,232,250,0) 0%,rgba(239,231,248,.55) 40%,#EFE7F8 78%);pointer-events:none")}>
+            <div style={st("width:100%;display:flex;align-items:center;gap:2px;padding:8px;border-radius:34px;pointer-events:auto;background:linear-gradient(150deg,rgba(255,255,255,.78) 0%,rgba(243,236,252,.5) 48%,rgba(224,213,244,.62) 100%);backdrop-filter:blur(20px) saturate(1.6);-webkit-backdrop-filter:blur(20px) saturate(1.6);box-shadow:0 16px 36px rgba(88,64,148,.26),0 2px 0 rgba(255,255,255,.9) inset,inset 3px 4px 10px rgba(255,255,255,.85),inset -4px -6px 14px rgba(120,95,175,.2)")}>
+              <NavBtn item={v.navHome} label="หน้าแรก"><NavHomeIcon /></NavBtn>
+              <NavBtn item={v.navInv} label="ของในบ้าน"><NavInvIcon /></NavBtn>
+              <button onClick={nav("cam")} style={st("width:66px;height:66px;flex:none;margin:0 2px;border:none;border-radius:24px;background:linear-gradient(150deg,#8B7BE8 0%,#6A57D6 45%,#5039BD 100%);box-shadow:0 14px 28px rgba(80,57,189,.45),-5px -7px 14px rgba(255,255,255,.65),inset 3px 4px 9px rgba(255,255,255,.42),inset -4px -7px 12px rgba(40,20,90,.3);cursor:pointer;display:grid;place-items:center;transform:translateY(-10px)")}>
+                <NavCamIcon />
+              </button>
+              <NavBtn item={v.navShop} label="รายการซื้อ"><NavShopIcon /></NavBtn>
+              <NavBtn item={v.navHist} label="ประวัติ"><NavHistIcon /></NavBtn>
+            </div>
+          </div>
+
+          {/* toast */}
+          {s.toast && (
+            <div style={st("position:absolute;left:22px;right:22px;bottom:118px;z-index:55;border-radius:20px;padding:14px 16px;font:500 12.5px/1.5 Mitr,sans-serif;color:#ffffff;background:rgba(58,46,92,.94);box-shadow:0 14px 30px rgba(60,42,110,.35);animation:clayIn .25s ease both")}>
+              {s.toast}
+            </div>
+          )}
+
+          {/* photo viewer */}
+          {s.viewer && <ViewerLayer v={v} />}
+
+          {/* bottom sheet */}
+          {s.sheet && <SheetLayer v={v} />}
+        </div>
+      </div>
+    </IOSFrame>
+  );
+}
+
+// ═══ view-model builder ══════════════════════════════════════════════════════
+
+type PendingItem = State["pending"][number];
+type Helpers = {
+  startAddFrom: (p: PendingItem) => () => void;
+  startMoveFrom: (p: PendingItem) => () => void;
+  startUseFrom: (p: PendingItem) => () => void;
+  set: (patch: Partial<State>) => void;
+  flash: (t: string) => void;
+  nav: (screen: Screen) => () => void;
+  onAddSave: () => void;
+  onMoveSave: () => void;
+  onUseSave: () => void;
+};
+
+function build(
+  s: State,
+  tone: (typeof TONE)[string],
+  head: () => [string, string],
+  locLabel: (code: string) => string,
+  item: (id: number | null) => Item | undefined,
+  H: Helpers,
+) {
+  const { set, flash, nav, onAddSave, onMoveSave, onUseSave } = H;
+  const items = s.items;
+  const screen = s.screen;
+  const d = homeDerived(items, TODAY);
+  const { expiring, out, low, totalQty, ready } = d;
+  const shop = shopRows(items, s.bought);
+
+  // alerts
+  const alerts: {
+    tag: string;
+    pill: string;
+    name: string;
+    detail: string;
+    cta: string;
+    on: () => void;
+  }[] = [];
+  expiring.forEach((i) => {
+    const dd = days(i.exp, TODAY)!;
+    alerts.push({
+      tag: dd <= 1 ? "EXP 1 วัน" : `EXP ${dd} วัน`,
+      pill: pill("#FFE6E6", "#C9524F"),
+      name: i.name,
+      detail: `หมดอายุ ${i.exp} · ${locLabel(i.loc)} · เหลือ ${i.qty}`,
+      cta: "ใช้เลย",
+      on: () => set({ screen: "use", useQuery: i.name, useId: i.id, useQty: 1 }),
+    });
+  });
+  out.forEach((i) => {
+    alerts.push({
+      tag: "หมดแล้ว",
+      pill: pill("#FFE9DC", "#C4692F"),
+      name: i.name,
+      detail: `ที่ ${locLabel(i.loc)} · ต้องมีขั้นต่ำ ${i.min}`,
+      cta: "ใส่ลิสต์",
+      on: nav("shop"),
+    });
+  });
+  low.forEach((i) => {
+    alerts.push({
+      tag: "ใกล้หมด",
+      pill: pill("#FFF4D9", "#A9741B"),
+      name: i.name,
+      detail: `เหลือ ${i.qty} · ขั้นต่ำ ${i.min} · target ${i.target}`,
+      cta: "ใส่ลิสต์",
+      on: nav("shop"),
+    });
+  });
+
+  // pending cards
+  const pendingList = s.pending.map((p) => ({
+    key: p.id,
+    name: p.name,
+    src: p.src,
+    shots: p.shots.map((label, si) => ({
+      label,
+      style: shot(p.shots.length > 1 ? 126 : 170),
+      on: () => set({ viewer: { shots: p.shots, idx: si, src: `${p.name} · ${p.src}` } }),
+    })),
+    status: p.miss,
+    statusStyle: `margin-top:5px;font:400 12px "IBM Plex Sans Thai",sans-serif;color:${p.ready ? "#2E8F6B" : "#C4692F"}`,
+    actions: [
+      { label: "เก็บของ", on: H.startAddFrom(p), style: chip(p.evt === "ADD", true) },
+      { label: "ย้ายของ", on: H.startMoveFrom(p), style: chip(p.evt === "MOVE", true) },
+      { label: "ใช้ของ", on: H.startUseFrom(p), style: chip(p.evt === "USE", true) },
+    ],
+  }));
+
+  // camera
+  const camEvents = ([["ADD", "เก็บของ"], ["MOVE", "ย้ายของ"], ["USE", "ของที่ถูกใช้"]] as const).map(
+    (e) => ({ label: e[1], style: chip(s.camEvt === e[0], true), on: () => set({ camEvt: e[0] }) }),
+  );
+
+  // add rows
+  const addRows = s.addRows.map((r, idx) => {
+    const put = (patch: Partial<AddRow>) =>
+      set({ addRows: s.addRows.map((x, i) => (i === idx ? { ...x, ...patch } : x)) });
+    return {
+      key: idx,
+      tag: `รายการที่ ${idx + 1}`,
+      removeStyle: s.addRows.length > 1 ? ghost() : "display:none",
+      remove: () => set({ addRows: s.addRows.filter((_, i) => i !== idx) }),
+      name: r.name,
+      setName: (e: ChangeEvent<HTMLInputElement>) => put({ name: e.target.value }),
+      mic: () => {
+        put({ name: r.name || "สเปรย์กระจก" });
+        flash("🎙 Voice-to-Text: “สเปรย์กระจก”");
+      },
+      kinds: ([["supply", "ของใช้"], ["food", "ของกิน"]] as const).map((k) => ({
+        label: k[1],
+        style: chip(r.kind === k[0], true),
+        on: () => put({ kind: k[0], expVal: "" }),
+      })),
+      isFood: r.kind === "food",
+      expModes: ([["days", "อายุกี่วัน"], ["date", "ระบุวันที่"]] as const).map((m) => ({
+        label: m[1],
+        style: chip(r.expMode === m[0], true),
+        on: () => put({ expMode: m[0], expVal: "" }),
+      })),
+      expVal: r.expVal,
+      setExp: (e: ChangeEvent<HTMLInputElement>) => put({ expVal: e.target.value }),
+      expInputType: r.expMode === "days" ? "number" : "date",
+      expPlaceholder: r.expMode === "days" ? "เช่น 7" : "",
+      expHint: r.expMode === "days" ? "วันนับจากวันนี้" : "วัน EXP จริง",
+      qty: r.qty,
+      inc: () => put({ qty: r.qty + 1 }),
+      dec: () => put({ qty: Math.max(1, r.qty - 1) }),
+      locQuery: r.locQuery || "",
+      setLocQuery: (e: ChangeEvent<HTMLInputElement>) => put({ locQuery: e.target.value, loc: "" }),
+      clearLoc: () => put({ locQuery: "", loc: "" }),
+      clearLocStyle: r.locQuery || r.loc ? ghost() : "display:none",
+      locPicked: !!r.loc,
+      locCode: r.loc,
+      locName: r.loc ? locLabel(r.loc) : "",
+      locSuggest: locSug(s.locs, r.locQuery, r.loc).map((l) => ({
+        name: `${l.name} (${l.room})`,
+        meta: l.code,
+        on: () => put({ loc: l.code, locQuery: `${l.name} (${l.room})` }),
+      })),
+    };
+  });
+
+  // move rows
+  const moveRows = s.moveRows.map((r, idx) => {
+    const put = (patch: Partial<MoveRow>) =>
+      set({ moveRows: s.moveRows.map((x, i) => (i === idx ? { ...x, ...patch } : x)) });
+    const picked = r.itemId ? item(r.itemId) : null;
+    const q = r.query.trim();
+    const sug = !picked && q ? items.filter((i) => i.qty > 0 && i.name.includes(q)).slice(0, 4) : [];
+    return {
+      key: idx,
+      tag: `ย้ายรายการที่ ${idx + 1}`,
+      removeStyle: s.moveRows.length > 1 ? ghost() : "display:none",
+      remove: () => set({ moveRows: s.moveRows.filter((_, i) => i !== idx) }),
+      query: r.query,
+      setQuery: (e: ChangeEvent<HTMLInputElement>) => put({ query: e.target.value, itemId: null }),
+      suggest: sug.map((i) => ({
+        name: i.name,
+        meta: `${i.loc} · เหลือ ${i.qty}`,
+        on: () => put({ itemId: i.id, query: i.name, qty: 1 }),
+      })),
+      picked: !!picked,
+      pickedName: picked ? picked.name : "",
+      pickedMeta: picked ? `เหลือ ${picked.qty}` : "",
+      fromCode: picked ? picked.loc : "",
+      fromName: picked ? locLabel(picked.loc) : "",
+      fromCodeStyle: codeBadge(true),
+      qty: r.qty,
+      inc: () => put({ qty: Math.min(picked ? picked.qty : 99, r.qty + 1) }),
+      dec: () => put({ qty: Math.max(1, r.qty - 1) }),
+      locQuery: r.locQuery || "",
+      setLocQuery: (e: ChangeEvent<HTMLInputElement>) => put({ locQuery: e.target.value, to: "" }),
+      clearLoc: () => put({ locQuery: "", to: "" }),
+      clearLocStyle: r.locQuery || r.to ? ghost() : "display:none",
+      locPicked: !!r.to,
+      locCode: r.to,
+      locName: r.to ? locLabel(r.to) : "",
+      locSuggest: locSug(s.locs, r.locQuery, r.to).map((l) => ({
+        name: `${l.name} (${l.room})`,
+        meta: l.code,
+        on: () => put({ to: l.code, locQuery: `${l.name} (${l.room})` }),
+      })),
+    };
+  });
+
+  // use
+  const uq = s.useQuery.trim();
+  const usePick = s.useId ? item(s.useId) : null;
+  const useSuggest = items
+    .filter((i) => !uq || i.name.includes(uq))
+    .map((i) => ({
+      name: i.name,
+      loc: locLabel(i.loc),
+      code: i.loc,
+      left: `เหลือ ${i.qty}`,
+      codeStyle: codeBadge(false),
+      style:
+        "border:none;cursor:pointer;display:flex;align-items:center;gap:12px;border-radius:22px;padding:14px 16px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff" +
+        (i.qty <= 0 ? ";opacity:.55" : ""),
+      on: () => set({ useId: i.id, useQty: 1, useQuery: i.name }),
+    }));
+  let useWarn = "";
+  let useWarnStyle = "display:none";
+  if (usePick) {
+    if (usePick.qty - s.useQty <= 0) {
+      useWarn = "ใช้แล้วจะเหลือ 0 — ระบบจะเตือนของหมดและใส่รายการซื้อ";
+      useWarnStyle =
+        'margin-top:12px;border-radius:16px;padding:11px 13px;font:400 12px/1.5 "IBM Plex Sans Thai",sans-serif;color:#C4692F;background:#FFF1E6;box-shadow:inset 3px 4px 9px rgba(200,120,70,.14)';
+    } else if (usePick.qty - s.useQty <= usePick.min) {
+      useWarn = `ใช้แล้วจะต่ำกว่าขั้นต่ำ (${usePick.min})`;
+      useWarnStyle =
+        'margin-top:12px;border-radius:16px;padding:11px 13px;font:400 12px/1.5 "IBM Plex Sans Thai",sans-serif;color:#A9741B;background:#FFF7E3;box-shadow:inset 3px 4px 9px rgba(180,140,40,.14)';
+    }
+  }
+
+  // inventory
+  const iq = s.invQuery.trim().toLowerCase();
+  const locMatch = s.locs.filter((l) => !iq || (l.name + l.room + l.code).toLowerCase().includes(iq));
+  let itemMatch = items.filter((i) => !iq || (i.name + i.loc).toLowerCase().includes(iq));
+  if (s.invLoc) itemMatch = items.filter((i) => i.loc === s.invLoc);
+  const showLocs = (s.invMode === "all" || s.invMode === "loc") && !s.invLoc;
+  const showItems = s.invMode === "all" || s.invMode === "item" || !!s.invLoc;
+  const invItems = itemMatch.map((i) => {
+    const dd = days(i.exp, TODAY);
+    return {
+      key: i.id,
+      name: i.name,
+      locLabel: locLabel(i.loc),
+      code: i.loc,
+      date: i.date,
+      codeStyle: codeBadge(true),
+      qtyLabel: i.qty <= 0 ? "หมด" : `เหลือ ${i.qty}`,
+      qtyStyle: pill(
+        i.qty <= 0 ? "#FFE6E6" : !i.noStock && i.qty <= i.min ? "#FFF4D9" : "#E9F7EF",
+        i.qty <= 0 ? "#C9524F" : !i.noStock && i.qty <= i.min ? "#A9741B" : "#2E8F6B",
+      ),
+      expLabel: i.exp
+        ? `EXP ${i.exp}${dd !== null ? (dd < 0 ? " (เลยแล้ว)" : ` (อีก ${dd} วัน)`) : ""}`
+        : "ของใช้ · ไม่มี EXP",
+      expStyle: `font:400 11px "IBM Plex Mono",monospace;color:${i.exp && dd !== null && dd <= 3 ? "#C9524F" : "#9A90BC"}`,
+    };
+  });
+
+  // history
+  const histList = s.hist
+    .filter((e) => {
+      if (s.histMode === "item")
+        return !s.histQuery.trim() || e.name.includes(s.histQuery.trim());
+      if (s.histMode === "loc") return !s.histLoc || e.to === s.histLoc || e.from === s.histLoc;
+      const dd = e.date.slice(0, 10);
+      return dd >= s.histFrom && dd <= s.histTo;
+    })
+    .map((e, idx) => {
+      const color = { ADD: "#5B49C9", MOVE: "#2E8F86", USE: "#C4692F", ADJUST: "#8B82A6" }[e.evt];
+      const label = { ADD: "เก็บเข้าบ้าน", MOVE: "ย้าย", USE: "ใช้", ADJUST: "ปรับจำนวน" }[e.evt];
+      const tint = { ADD: "#F3F0FE", MOVE: "#E9F7F5", USE: "#FFF2E8", ADJUST: "#F5F2FA" }[e.evt];
+      return {
+        key: idx,
+        title: `${label} · ${e.name}`,
+        date: e.date.slice(5),
+        titleStyle: `font:500 14px Mitr,sans-serif;color:${color}`,
+        codeLabel: e.evt === "MOVE" ? `${e.from} → ${e.to}` : e.to,
+        codeStyle:
+          'flex:none;border-radius:11px;padding:6px 9px;font:500 10.5px "IBM Plex Mono",monospace;letter-spacing:.6px;color:#ffffff;background:' +
+          color +
+          ";box-shadow:3px 4px 9px rgba(90,68,180,.22),inset 2px 2px 5px rgba(255,255,255,.24)",
+        detail:
+          (e.evt === "MOVE" ? `${locLabel(e.from!)} → ${locLabel(e.to!)}` : locLabel(e.to!)) +
+          ` · ${e.qty} หน่วย`,
+        who: e.who,
+        initial: e.who.slice(0, 1),
+        avatarStyle:
+          "width:22px;height:22px;flex:none;border-radius:8px;display:grid;place-items:center;font:500 10.5px Mitr,sans-serif;color:#ffffff;background:" +
+          color +
+          ";box-shadow:2px 3px 7px rgba(90,68,180,.24)",
+        whoStyle: `font:500 12.5px Mitr,sans-serif;color:${color}`,
+        cardStyle:
+          "border-radius:20px;padding:13px 15px;background:" +
+          tint +
+          ";border:1.5px solid " +
+          color +
+          ";box-shadow:7px 9px 20px rgba(120,95,175,.14),-4px -5px 12px #ffffff,inset 2px 2px 5px rgba(255,255,255,.7)",
+        dot:
+          "width:14px;height:14px;border-radius:50%;margin:14px 0 4px;background:" +
+          color +
+          ";box-shadow:0 0 0 5px rgba(255,255,255,.9),3px 4px 9px rgba(120,95,175,.3)",
+      };
+    });
+
+  // shopping groups
+  const mk = (g: "out" | "low" | "bought") =>
+    shop
+      .filter((r) => r.group === g)
+      .map((r, idx) => {
+        const isB = g === "bought";
+        return {
+          key: `${g}-${idx}`,
+          name: r.name,
+          code: r.code,
+          tick: isB ? "✓" : "",
+          codeStyle: codeBadge(false),
+          nameStyle:
+            "font:500 14.5px Mitr,sans-serif;color:" +
+            (isB ? "#8B82A6" : "#3A3254") +
+            (isB ? ";text-decoration:line-through" : ""),
+          detail: isB
+            ? "ซื้อแล้ว · ยังไม่เพิ่ม stock (รอบันทึก ADD)"
+            : r.qty <= 0
+              ? `หมดแล้ว · ขั้นต่ำ ${r.min}`
+              : `เหลือ ${r.qty} · ขั้นต่ำ ${r.min}`,
+          cardStyle:
+            "display:flex;align-items:center;gap:13px;border-radius:22px;padding:14px 16px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff" +
+            (isB ? ";opacity:.7" : ""),
+          tickStyle:
+            "width:34px;height:34px;flex:none;border:none;border-radius:12px;cursor:pointer;font:500 15px Mitr,sans-serif;color:#ffffff;background:" +
+            (isB ? "linear-gradient(145deg,#5FC79E,#2E8F6B)" : "#F1ECFA") +
+            ";box-shadow:" +
+            (isB
+              ? "4px 5px 12px rgba(46,143,107,.3)"
+              : "inset 3px 4px 9px rgba(120,95,175,.2),inset -2px -2px 6px #ffffff"),
+          on: isB
+            ? () => set({ bought: s.bought.filter((x) => x !== r.name) })
+            : () => set({ sheet: { kind: "buy", name: r.name } }),
+        };
+      });
+  const shopGroups = [
+    { key: "out", title: "หมดแล้ว", rows: mk("out"), dotColor: "#D9605C", dotRgb: "217,96,92" },
+    { key: "low", title: "ใกล้หมด", rows: mk("low"), dotColor: "#E0A02F", dotRgb: "224,160,47" },
+    { key: "bought", title: "ซื้อแล้ว", rows: mk("bought"), dotColor: "#3EA57C", dotRgb: "62,165,124" },
+  ].map((g) => ({
+    ...g,
+    count: `${g.rows.length} รายการ`,
+    empty: g.rows.length === 0,
+    dot: `width:11px;height:11px;border-radius:50%;background:${g.dotColor};box-shadow:0 0 0 4px rgba(${g.dotRgb},.16)`,
+  }));
+
+  // settings – items
+  const sq = s.setQuery.trim().toLowerCase();
+  const setRows = items
+    .filter((i) => !sq || (i.name + i.loc).toLowerCase().includes(sq))
+    .map((i) => {
+      const patch = (k: "min" | "target", vv: number) =>
+        set({
+          items: s.items.map((x) =>
+            x.id === i.id
+              ? { ...x, min: k === "min" ? vv : x.min, target: k === "target" ? vv : x.target }
+              : x,
+          ),
+        });
+      return {
+        key: i.id,
+        name: i.name,
+        qty: i.qty,
+        code: i.loc || "ยังไม่ระบุ",
+        codeStyle: codeBadge(true),
+        kindLabel: i.kind === "food" ? "ของกิน" : "ของใช้",
+        del: () => set({ sheet: { kind: "delItem", id: i.id, name: i.name }, sheetText: "" }),
+        toggleTrack: () =>
+          set({ items: s.items.map((x) => (x.id === i.id ? { ...x, noStock: !x.noStock } : x)) }),
+        trackLabel: i.noStock ? "ไม่นับสต็อก (ของคงทน)" : "นับสต็อก · ตั้งขั้นต่ำได้",
+        trackStyle:
+          "border:none;cursor:pointer;text-align:left;border-radius:13px;padding:8px 10px;font:500 10.5px Mitr,sans-serif;" +
+          (i.noStock
+            ? "color:#8B82A6;background:#F1ECFA;box-shadow:inset 2px 3px 7px rgba(120,95,175,.16),inset -2px -2px 6px #ffffff"
+            : "color:#2E8F6B;background:#E9F7EF;box-shadow:inset 2px 3px 7px rgba(46,143,107,.14),2px 3px 8px rgba(46,143,107,.12)"),
+        fields: i.noStock
+          ? []
+          : [
+              { label: "MINIMUM", value: i.min, inc: () => patch("min", i.min + 1), dec: () => patch("min", Math.max(0, i.min - 1)) },
+              { label: "TARGET", value: i.target, inc: () => patch("target", i.target + 1), dec: () => patch("target", Math.max(1, i.target - 1)) },
+            ],
+      };
+    });
+
+  // settings – places
+  const pq = s.placeQuery.trim().toLowerCase();
+  const placeRows = s.locs
+    .filter((l) => !pq || (l.name + l.room + l.code).toLowerCase().includes(pq))
+    .map((l) => {
+      const patch = (fields: Partial<Loc>) =>
+        set({
+          locs: s.locs.map((x) =>
+            x.code === l.code
+              ? {
+                  ...x,
+                  ...fields,
+                  label: `${fields.code || x.code} · ${fields.room || x.room} – ${fields.name || x.name}`,
+                }
+              : x,
+          ),
+        });
+      return {
+        key: l.code,
+        code: l.code,
+        name: l.name,
+        room: l.room,
+        itemCount: `${items.filter((i) => i.loc === l.code).length} items`,
+        setCode: (e: ChangeEvent<HTMLInputElement>) => {
+          const vv = e.target.value.toUpperCase();
+          if (s.locs.filter((x) => x.code === vv && x.code !== l.code).length) {
+            flash(`⚠ รหัส ${vv} ถูกใช้แล้ว — ต้องไม่ซ้ำ`);
+            return;
+          }
+          set({
+            locs: s.locs.map((x) =>
+              x.code === l.code ? { ...x, code: vv, label: `${vv} · ${x.room} – ${x.name}` } : x,
+            ),
+            items: s.items.map((i) => (i.loc === l.code ? { ...i, loc: vv } : i)),
+          });
+        },
+        setName: (e: ChangeEvent<HTMLInputElement>) => patch({ name: e.target.value }),
+        setRoom: (e: ChangeEvent<HTMLInputElement>) => patch({ room: e.target.value }),
+        del: () => {
+          if (items.filter((i) => i.loc === l.code && i.qty > 0).length) {
+            flash(`ยังมีของอยู่ใน ${l.code} — ย้ายของออกก่อนลบ`);
+            return;
+          }
+          set({ sheet: { kind: "delPlace", code: l.code, name: l.name }, sheetText: "" });
+        },
+      };
+    });
+
+  // sheet
+  const sheet = s.sheet;
+  let sheetTitle = "";
+  let sheetSub = "";
+  let sheetActions: { label: string; style: string; on: () => void }[] = [];
+  let sheetHasInput = false;
+  let sheetInputPh = "";
+  let sheetHasChips = false;
+  let sheetChips: { label: string; style: string; on: () => void }[] = [];
+  let sheetHasPlace = false;
+  let placeRoomChips: { label: string; style: string; on: () => void }[] = [];
+  let placeRoomIsNew = false;
+  let placeCodeVal = "";
+  let placeCodeHint = "";
+
+  if (sheet?.kind === "cam") {
+    const evtLabel = { ADD: "เก็บของ", MOVE: "ย้ายของ", USE: "ใช้ของ" }[s.camEvt];
+    sheetTitle = "บันทึกเลย หรือส่งเข้ารายการรอบันทึก?";
+    sheetSub = `รูป ${s.camShots.length} รูป · ประเภท ${evtLabel}`;
+    sheetActions = [
+      {
+        label: `บันทึกเลย (${evtLabel})`,
+        style: PRIM,
+        on: () => {
+          const scr = { ADD: "add", MOVE: "move", USE: "use" }[s.camEvt] as Screen;
+          set({ sheet: null, screen: scr, camShots: [] });
+        },
+      },
+      {
+        label: "ส่งเข้ารายการรอบันทึก",
+        style: SEC,
+        on: () => {
+          const p = {
+            id: `p${Date.now()}`,
+            name: "ของจากรูปใหม่",
+            src: "IN-APP",
+            shots: s.camShots.slice(),
+            evt: s.camEvt,
+            ready: false,
+            miss: "ยังไม่ได้ระบุชื่อ / จำนวน / สถานที่",
+          };
+          set({ sheet: null, screen: "pending", camShots: [], pending: [p, ...s.pending] });
+          flash("ส่งเข้ารายการรอบันทึกแล้ว");
+        },
+      },
+    ];
+  }
+
+  if (sheet?.kind === "newItem") {
+    sheetTitle = "เพิ่มรายการของในบ้าน";
+    sheetSub = "ตั้งชื่อและประเภท — จำนวนเริ่มต้น 0 ชิ้น รอบันทึก ADD";
+    sheetHasInput = true;
+    sheetInputPh = "ชื่อของ เช่น ถ่าน AA";
+    sheetHasChips = true;
+    sheetChips = ([["supply", "ของใช้"], ["food", "ของกิน"]] as const).map((k) => ({
+      label: k[1],
+      style: chip(s.newKind === k[0], true),
+      on: () => set({ newKind: k[0] }),
+    }));
+    sheetActions = [
+      {
+        label: "เพิ่มรายการ",
+        style: PRIM,
+        on: () => {
+          const name = s.sheetText.trim();
+          if (!name) return flash("ใส่ชื่อของก่อน");
+          const dup = s.items.find((i) => i.name.trim().toLowerCase() === name.toLowerCase());
+          if (dup) return flash(`⚠ มี “${name}” อยู่แล้วที่ ${dup.loc} — ใช้ ADD เพื่อเพิ่มจำนวนแทน`);
+          set({
+            sheet: null,
+            sheetText: "",
+            items: [
+              ...s.items,
+              {
+                id: Date.now(),
+                name,
+                kind: s.newKind,
+                qty: 0,
+                loc: "",
+                owner: s.owner,
+                date: TODAY_ISO,
+                exp: null,
+                min: 1,
+                target: 2,
+              },
+            ],
+          });
+          flash(`เพิ่ม “${name}” เข้ารายการแล้ว`);
+        },
+      },
+      { label: "ยกเลิก", style: SEC, on: () => set({ sheet: null, sheetText: "" }) },
+    ];
+  }
+
+  if (sheet?.kind === "newPlace") {
+    sheetHasPlace = true;
+    const rooms: string[] = [];
+    s.locs.forEach((l) => {
+      if (!rooms.includes(l.room)) rooms.push(l.room);
+    });
+    const room =
+      s.placeRoom === "__new" ? s.placeRoomCustom.trim() : s.placeRoom || rooms[0];
+    placeRoomIsNew = s.placeRoom === "__new";
+    placeRoomChips = [...rooms, "+ หลักใหม่"].map((r) => {
+      const key = r === "+ หลักใหม่" ? "__new" : r;
+      return {
+        label: r,
+        style: chip((s.placeRoom || rooms[0]) === key, false),
+        on: () => set({ placeRoom: key, placeCode: "" }),
+      };
+    });
+    placeCodeVal = s.placeCode || autoCode(s.locs, room);
+    placeCodeHint = "ตั้งตาม location หลัก แล้ว run เลขต่อไปเรื่อย ๆ";
+    sheetTitle = "เพิ่มสถานที่จัดเก็บ";
+    sheetSub = "เลือก location หลัก แล้วพิมพ์ location รอง เช่น “ลิ้นชักล่างสุด”";
+    sheetHasInput = true;
+    sheetInputPh = "location รอง เช่น ลิ้นชักล่างสุด";
+    sheetActions = [
+      {
+        label: "สร้างสถานที่",
+        style: PRIM,
+        on: () => {
+          const name = s.sheetText.trim();
+          const code = (s.placeCode || autoCode(s.locs, room)).toUpperCase();
+          if (!room) return flash("ระบุ location หลักก่อน");
+          if (!name) return flash("ใส่ชื่อ location รองก่อน");
+          if (s.locs.filter((x) => x.code === code).length)
+            return flash(`⚠ รหัส ${code} ถูกใช้แล้ว — ต้องไม่ซ้ำ`);
+          if (s.locs.filter((x) => x.room === room && x.name === name).length)
+            return flash(`⚠ มี “${room} – ${name}” อยู่แล้ว`);
+          set({
+            sheet: null,
+            sheetText: "",
+            setTab: "places",
+            placeCode: "",
+            placeRoom: "",
+            placeRoomCustom: "",
+            locs: [...s.locs, { code, name, room, label: `${code} · ${room} – ${name}` }],
+          });
+          flash(`สร้าง ${code} · ${room} – ${name} แล้ว`);
+        },
+      },
+      {
+        label: "ยกเลิก",
+        style: SEC,
+        on: () => set({ sheet: null, sheetText: "", placeCode: "", placeRoom: "", placeRoomCustom: "" }),
+      },
+    ];
+  }
+
+  if (sheet?.kind === "delPlace") {
+    const okP = s.sheetText.trim().toLowerCase() === "delete";
+    sheetTitle = `ลบสถานที่ “${sheet.name}” (${sheet.code})?`;
+    sheetSub = "พิมพ์คำว่า Delete เพื่อยืนยัน";
+    sheetHasInput = true;
+    sheetInputPh = "พิมพ์ Delete";
+    sheetActions = [
+      {
+        label: okP ? "ลบสถานที่นี้" : "พิมพ์ Delete ให้ถูกต้องก่อน",
+        style: okP ? DANGER : SEC + ";opacity:.6",
+        on: () => {
+          if (!okP) return flash("ต้องพิมพ์ Delete เพื่อยืนยัน");
+          set({ sheet: null, sheetText: "", locs: s.locs.filter((x) => x.code !== sheet.code) });
+          flash(`ลบสถานที่ ${sheet.code} แล้ว`);
+        },
+      },
+      { label: "ยกเลิก", style: SEC, on: () => set({ sheet: null, sheetText: "" }) },
+    ];
+  }
+
+  if (sheet?.kind === "delItem") {
+    const ok = s.sheetText.trim().toLowerCase() === "delete";
+    sheetTitle = `ลบ “${sheet.name}” ออกจากระบบ?`;
+    sheetSub = "พิมพ์คำว่า Delete เพื่อยืนยัน — ประวัติเดิมยังอยู่ใน Audit trail";
+    sheetHasInput = true;
+    sheetInputPh = "พิมพ์ Delete";
+    sheetActions = [
+      {
+        label: ok ? "ลบรายการนี้" : "พิมพ์ Delete ให้ถูกต้องก่อน",
+        style: ok ? DANGER : SEC + ";opacity:.6",
+        on: () => {
+          if (!ok) return flash("ต้องพิมพ์ Delete เพื่อยืนยัน");
+          set({ sheet: null, sheetText: "", items: s.items.filter((i) => i.id !== sheet.id) });
+          flash(`ลบ “${sheet.name}” แล้ว`);
+        },
+      },
+      { label: "ยกเลิก", style: SEC, on: () => set({ sheet: null, sheetText: "" }) },
+    ];
+  }
+
+  if (sheet?.kind === "buy") {
+    sheetTitle = `ซื้อ “${sheet.name}” สำเร็จแล้วใช่ไหม?`;
+    sheetSub = "ยืนยันแล้วจะย้ายไปกลุ่มซื้อแล้ว แต่ stock จะเพิ่มเมื่อบันทึก ADD";
+    sheetActions = [
+      {
+        label: "ยืนยัน",
+        style: PRIM,
+        on: () => {
+          set({ sheet: null, bought: [...s.bought, sheet.name] });
+          flash(`ติ๊ก “${sheet.name}” เป็นซื้อแล้ว`);
+        },
+      },
+      { label: "ยกเลิก", style: SEC, on: () => set({ sheet: null }) },
+    ];
+  }
+
+  const navItem = (key: Screen) => {
+    const on =
+      screen === key ||
+      (key === "inv" && (screen === "use" || screen === "add" || screen === "move"));
+    return {
+      on: nav(key),
+      style:
+        "flex:1;min-width:0;border:none;cursor:pointer;border-radius:24px;padding:10px 4px 9px;color:" +
+        (on ? "#4E3CB8" : "#9A90BC") +
+        ";background:" +
+        (on
+          ? "linear-gradient(150deg,rgba(255,255,255,.95),rgba(232,224,250,.75))"
+          : "transparent") +
+        ";box-shadow:" +
+        (on
+          ? "0 8px 18px rgba(90,68,150,.18),inset 2px 3px 7px rgba(255,255,255,.95),inset -3px -4px 9px rgba(120,95,175,.18)"
+          : "none") +
+        ";display:flex;flex-direction:column;align-items:center;gap:4px;transition:color .2s ease",
+      labelStyle: `font:500 10px Mitr,sans-serif;color:${on ? "#4E3CB8" : "#9A90BC"}`,
+    };
+  };
+
+  const h = head();
+
+  return {
+    head: h,
+    tone,
+    todayLabel: "อาทิตย์ 6 ก.ย. 2569 · 09:12",
+    homeHeadline: `ของพร้อมใช้ ${ready}% · ต้องดูด่วน ${expiring.length + out.length} รายการ`,
+    stats: [
+      { num: totalQty, label: "ชิ้นในบ้าน", numStyle: "font:500 21px Mitr,sans-serif;color:#ffffff" },
+      { num: expiring.length, label: "ใกล้หมดอายุ", numStyle: "font:500 21px Mitr,sans-serif;color:#FFD98A" },
+      { num: shop.length, label: "ต้องซื้อ", numStyle: "font:500 21px Mitr,sans-serif;color:#FFB3A6" },
+    ],
+    goPending: nav("pending"),
+    pendingCount: s.pending.length,
+    quickActions: [
+      { label: "เก็บของ", sub: "ADD · หลายรายการ", sign: "+", on: nav("add"), dot: "width:40px;height:40px;border-radius:14px;display:grid;place-items:center;font:500 20px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:5px 6px 14px rgba(90,68,180,.3),inset 2px 2px 5px rgba(255,255,255,.3)" },
+      { label: "ค้นหาของ", sub: "สถานที่ / ชื่อของ", sign: "⌕", on: nav("inv"), dot: "width:40px;height:40px;border-radius:14px;display:grid;place-items:center;font:500 20px Mitr,sans-serif;color:#5B49C9;background:#EFE9FC;box-shadow:inset 3px 4px 9px rgba(120,95,175,.2),inset -2px -2px 7px #ffffff" },
+      { label: "ย้ายของ", sub: "MOVE · เปลี่ยนที่เก็บ", sign: "⇄", on: nav("move"), dot: "width:40px;height:40px;border-radius:14px;display:grid;place-items:center;font:500 18px Mitr,sans-serif;color:#2E8F86;background:#E4F5F1;box-shadow:inset 3px 4px 9px rgba(46,143,134,.18),inset -2px -2px 7px #ffffff" },
+      { label: "ใช้ของ", sub: "USE · ตัดยอด", sign: "–", on: nav("use"), dot: "width:40px;height:40px;border-radius:14px;display:grid;place-items:center;font:500 20px Mitr,sans-serif;color:#C4692F;background:#FFEFE4;box-shadow:inset 3px 4px 9px rgba(196,105,47,.18),inset -2px -2px 7px #ffffff" },
+    ],
+    showAlerts: true,
+    alerts: alerts.slice(0, 5),
+    lineSummary: `📦 ใกล้หมดอายุ ${expiring.length} รายการ · ของหมด ${out.length} รายการ\n🛒 ต้องซื้อ ${shop.length} รายการ · รอบันทึก ${s.pending.length} รูป`,
+
+    pendingList,
+    pendingEmpty: s.pending.length === 0,
+
+    camShootItem: () => set({ camShots: [...s.camShots, `สิ่งของ ${s.camShots.length + 1}`] }),
+    camShootPlace: () => set({ camShots: [...s.camShots, "ที่เก็บ (option)"] }),
+    camClear: () => set({ camShots: [] }),
+    camClearStyle: s.camShots.length ? ghost() : "display:none",
+    camCount: s.camShots.length,
+    camThumbs: s.camShots.map((label, si) => ({
+      key: si,
+      label,
+      style: shot(86),
+      on: () => set({ viewer: { shots: s.camShots, idx: si, src: "รูปที่ถ่ายในแอพ" } }),
+    })),
+    camEvents,
+    camSave: () => {
+      if (!s.camShots.length) return flash("ถ่ายรูปอย่างน้อย 1 รูปก่อน");
+      set({ sheet: { kind: "cam" } });
+    },
+
+    ownerChips: (["เก่ง", "omo"] as const).map((o) => ({
+      label: o,
+      style: chip(s.owner === o, true),
+      on: () => set({ owner: o }),
+    })),
+
+    addRows,
+    addRow: () => set({ addRows: [...s.addRows, freshAddRow()] }),
+    addSaveLabel: `บันทึกเก็บของ ${s.addRows.length} รายการ`,
+
+    moveRows,
+    moveAddRow: () => set({ moveRows: [...s.moveRows, freshMoveRow()] }),
+    moveSaveLabel: `บันทึกการย้าย ${s.moveRows.length} รายการ`,
+
+    useQuery: s.useQuery,
+    setUseQuery: (e: ChangeEvent<HTMLInputElement>) => set({ useQuery: e.target.value, useId: null }),
+    useSuggest,
+    useCount: useSuggest.length,
+    usePicked: !!usePick,
+    useName: usePick ? usePick.name : "",
+    useMeta: usePick ? `${usePick.loc} — เหลือ ${usePick.qty}` : "",
+    useQty: s.useQty,
+    useInc: () => set({ useQty: Math.min(usePick ? usePick.qty : 99, s.useQty + 1) }),
+    useDec: () => set({ useQty: Math.max(1, s.useQty - 1) }),
+    useWarn,
+    useWarnStyle,
+
+    invQuery: s.invQuery,
+    setInvQuery: (e: ChangeEvent<HTMLInputElement>) => set({ invQuery: e.target.value, invLoc: null }),
+    invModes: ([["all", "ทั้งหมด"], ["loc", "สถานที่"], ["item", "สิ่งของ"]] as const).map((m) => ({
+      label: m[1],
+      style: chip(s.invMode === m[0] && !s.invLoc, true),
+      on: () => set({ invMode: m[0], invLoc: null }),
+    })),
+    invShowLocs: showLocs,
+    invLocCount: locMatch.length,
+    invLocs: locMatch.map((l) => ({
+      key: l.code,
+      code: l.code,
+      name: l.name,
+      room: l.room,
+      count: `${items.filter((i) => i.loc === l.code).reduce((a, i) => a + i.qty, 0)} ชิ้น`,
+      on: () => set({ invLoc: l.code, invQuery: l.name }),
+    })),
+    invShowItems: showItems,
+    invItemCount: invItems.length,
+    invItems,
+
+    histModes: ([["item", "ชื่อของ"], ["date", "ช่วงเวลา"], ["loc", "สถานที่"]] as const).map((m) => ({
+      label: m[1],
+      style: chip(s.histMode === m[0], true),
+      on: () => set({ histMode: m[0] }),
+    })),
+    histIsItem: s.histMode === "item",
+    histIsDate: s.histMode === "date",
+    histIsLoc: s.histMode === "loc",
+    histQuery: s.histQuery,
+    setHistQuery: (e: ChangeEvent<HTMLInputElement>) => set({ histQuery: e.target.value }),
+    histLoc: s.histLoc,
+    setHistLoc: (e: ChangeEvent<HTMLSelectElement>) => set({ histLoc: e.target.value }),
+    histFrom: s.histFrom,
+    setHistFrom: (e: ChangeEvent<HTMLInputElement>) => set({ histFrom: e.target.value }),
+    histTo: s.histTo,
+    setHistTo: (e: ChangeEvent<HTMLInputElement>) => set({ histTo: e.target.value }),
+    histRanges: (
+      [
+        ["เมื่อวาน", "2026-09-05", "2026-09-05"],
+        ["สัปดาห์นี้", "2026-08-31", "2026-09-06"],
+        ["30 วัน", "2026-08-07", "2026-09-06"],
+      ] as const
+    ).map((dr) => ({
+      label: dr[0],
+      style: chip(s.histFrom === dr[1] && s.histTo === dr[2], false),
+      on: () => set({ histFrom: dr[1], histTo: dr[2] }),
+    })),
+    locOptions: s.locs,
+    histCount: histList.length,
+    histList,
+
+    shopGroups,
+
+    tones: (["lilac", "peach", "mint"] as const).map((k) => {
+      const t = TONE[k];
+      const on = (s.tone || "lilac") === k;
+      return {
+        key: k,
+        label: t.label,
+        on: () => set({ tone: k }),
+        style:
+          "flex:1;border:none;cursor:pointer;border-radius:22px;padding:14px 10px;background:#FBF6FE;box-shadow:" +
+          (on
+            ? "inset 4px 5px 12px rgba(120,95,175,.2),inset -3px -3px 9px #ffffff"
+            : "8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff"),
+        swatch: `width:100%;height:34px;border-radius:14px;background:${t.sw};box-shadow:inset 2px 3px 7px rgba(255,255,255,.35),3px 4px 10px rgba(90,68,180,.25)`,
+      };
+    }),
+    setTabs: ([["places", "สถานที่จัดเก็บ"], ["items", "รายการของในบ้าน"]] as const).map((t) => ({
+      label: t[1],
+      style: chip(s.setTab === t[0], true),
+      on: () => set({ setTab: t[0] }),
+    })),
+    isSetPlaces: s.setTab === "places",
+    isSetItems: s.setTab === "items",
+    placeQuery: s.placeQuery,
+    setPlaceQuery: (e: ChangeEvent<HTMLInputElement>) => set({ placeQuery: e.target.value }),
+    placeCount: s.locs.length,
+    placeEmpty: placeRows.length === 0,
+    placeRows,
+    placeAddOpen: () => set({ sheet: { kind: "newPlace" }, sheetText: "" }),
+    setRows,
+    setCount: setRows.length,
+    setEmpty: setRows.length === 0,
+    setQuery: s.setQuery,
+    setSetQuery: (e: ChangeEvent<HTMLInputElement>) => set({ setQuery: e.target.value }),
+    setAddOpen: () => set({ sheet: { kind: "newItem" }, sheetText: "" }),
+
+    // viewer
+    viewerLabel: s.viewer ? s.viewer.shots[s.viewer.idx] : "",
+    viewerMeta: s.viewer ? `${s.viewer.src} · ${s.viewer.idx + 1}/${s.viewer.shots.length}` : "",
+    viewerPrev: () => {
+      const vv = s.viewer;
+      if (!vv) return;
+      set({ viewer: { ...vv, idx: (vv.idx - 1 + vv.shots.length) % vv.shots.length } });
+    },
+    viewerNext: () => {
+      const vv = s.viewer;
+      if (!vv) return;
+      set({ viewer: { ...vv, idx: (vv.idx + 1) % vv.shots.length } });
+    },
+    closeViewer: () => set({ viewer: null }),
+
+    // sheet
+    sheetTitle,
+    sheetSub,
+    sheetActions,
+    sheetHasInput,
+    sheetInputPh,
+    sheetInputVal: s.sheetText,
+    sheetInputSet: (e: ChangeEvent<HTMLInputElement>) => set({ sheetText: e.target.value }),
+    sheetHasChips,
+    sheetChips,
+    sheetHasPlace,
+    placeRoomChips,
+    placeRoomIsNew,
+    placeRoomCustom: s.placeRoomCustom,
+    setPlaceRoomCustom: (e: ChangeEvent<HTMLInputElement>) =>
+      set({ placeRoomCustom: e.target.value, placeCode: "" }),
+    placeCodeVal,
+    placeCodeHint,
+    setPlaceCode: (e: ChangeEvent<HTMLInputElement>) =>
+      set({ placeCode: e.target.value.toUpperCase() }),
+    closeSheet: () => set({ sheet: null }),
+
+    navHome: navItem("home"),
+    navInv: navItem("inv"),
+    navShop: navItem("shop"),
+    navHist: navItem("hist"),
+
+    onAddSave,
+    onMoveSave,
+    onUseSave,
+  };
+}
+
+type V = ReturnType<typeof build>;
+
+// ═══ screen components ═══════════════════════════════════════════════════════
+
+function NavBtn({ item, label, children }: { item: V["navHome"]; label: string; children: ReactNode }) {
+  return (
+    <button onClick={item.on} style={st(item.style)}>
+      {children}
+      <div style={st(item.labelStyle)}>{label}</div>
+    </button>
+  );
+}
+
+function HomeScreen({ v }: { v: V }) {
+  return (
+    <div style={st("animation:clayIn .3s ease both")}>
+      <div style={st("border-radius:30px;padding:20px 22px;background:linear-gradient(145deg,#7A6AE2 0%,#5B49C9 100%);box-shadow:12px 16px 30px rgba(90,68,180,.34),-6px -8px 18px rgba(255,255,255,.55),inset 3px 4px 8px rgba(255,255,255,.28),inset -4px -6px 12px rgba(40,20,90,.22)")}>
+        <div style={st("font:400 11.5px 'IBM Plex Mono',monospace;color:#D6CEF7;letter-spacing:.6px")}>{v.todayLabel}</div>
+        <div style={st("font:500 19px/1.4 Mitr,sans-serif;color:#ffffff;margin-top:6px")}>{v.homeHeadline}</div>
+        <div style={st("display:flex;gap:10px;margin-top:16px")}>
+          {v.stats.map((s2, i) => (
+            <div key={i} style={st("flex:1;background:rgba(255,255,255,.16);border-radius:18px;padding:11px 12px;box-shadow:inset 2px 3px 6px rgba(40,20,90,.18)")}>
+              <div style={st(s2.numStyle)}>{s2.num}</div>
+              <div style={st("font:400 11px 'IBM Plex Sans Thai',sans-serif;color:#DDD6F8")}>{s2.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <button onClick={v.goPending} style={st("width:100%;margin-top:15px;border:none;text-align:left;border-radius:26px;padding:15px 18px;background:#FBF6FE;box-shadow:10px 12px 26px rgba(120,95,175,.18),-6px -8px 18px #ffffff,inset 2px 2px 4px #ffffff;cursor:pointer;display:flex;align-items:center;gap:14px")}>
+        <div style={st("width:44px;height:44px;flex:none;border-radius:15px;background:#FFEFE4;box-shadow:inset 3px 4px 8px rgba(200,120,70,.2),3px 4px 10px rgba(220,140,90,.18);display:grid;place-items:center;font:500 17px Mitr,sans-serif;color:#DE7440")}>{v.pendingCount}</div>
+        <div style={st("flex:1")}>
+          <div style={st("font:500 15px Mitr,sans-serif;color:#3A3254")}>รายการรอบันทึก</div>
+          <div style={st("font:400 12px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6")}>รูปจากแอพ และ LINE Official รออยู่</div>
+        </div>
+        <ChevronRight />
+      </button>
+
+      <div style={st("font:500 14px Mitr,sans-serif;color:#5B5375;margin:22px 0 10px")}>ทำอะไรดี</div>
+      <div style={st("display:grid;grid-template-columns:1fr 1fr;gap:13px")}>
+        {v.quickActions.map((q, i) => (
+          <button key={i} onClick={q.on} style={st("border:none;text-align:left;border-radius:24px;padding:16px;background:#FBF6FE;box-shadow:9px 11px 24px rgba(120,95,175,.17),-6px -7px 16px #ffffff,inset 2px 2px 4px #ffffff;cursor:pointer")}>
+            <div style={st(q.dot)}>{q.sign}</div>
+            <div style={st("font:500 15px Mitr,sans-serif;color:#3A3254;margin-top:11px")}>{q.label}</div>
+            <div style={st("font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6")}>{q.sub}</div>
+          </button>
+        ))}
+      </div>
+
+      {v.showAlerts && (
+        <>
+          <div style={st("font:500 14px Mitr,sans-serif;color:#5B5375;margin:24px 0 10px")}>การ์ดเตือน</div>
+          <div style={st("display:flex;flex-direction:column;gap:12px")}>
+            {v.alerts.map((a, i) => (
+              <div key={i} style={st("border-radius:24px;padding:14px 16px;background:#FBF6FE;box-shadow:9px 11px 24px rgba(120,95,175,.16),-6px -7px 16px #ffffff;display:flex;align-items:center;gap:12px")}>
+                <div style={st(a.pill)}>{a.tag}</div>
+                <div style={st("flex:1;min-width:0")}>
+                  <div style={st("font:500 14.5px Mitr,sans-serif;color:#3A3254")}>{a.name}</div>
+                  <div style={st("font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6")}>{a.detail}</div>
+                </div>
+                <button onClick={a.on} style={st("border:none;flex:none;border-radius:14px;padding:9px 12px;font:500 12px Mitr,sans-serif;color:#5B49C9;background:#EFE9FC;box-shadow:inset 1px 1px 3px #ffffff,3px 4px 10px rgba(120,95,175,.18);cursor:pointer")}>{a.cta}</button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      <div style={st("margin-top:20px;border-radius:22px;padding:14px 16px;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.16),inset -3px -4px 10px #ffffff")}>
+        <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#8B82A6;letter-spacing:.5px")}>LINE DAILY SUMMARY · 09:00</div>
+        <div style={st("font:400 12.5px/1.65 'IBM Plex Sans Thai',sans-serif;color:#5B5375;margin-top:6px;white-space:pre-line")}>{v.lineSummary}</div>
+      </div>
+    </div>
+  );
+}
+
+function PendingScreen({ v }: { v: V }) {
+  return (
+    <div style={st("animation:clayIn .3s ease both;display:flex;flex-direction:column;gap:14px")}>
+      {v.pendingList.map((p) => (
+        <div key={p.key} style={st("border-radius:28px;padding:14px;background:#FBF6FE;box-shadow:10px 13px 28px rgba(120,95,175,.18),-6px -8px 18px #ffffff,inset 2px 2px 4px #ffffff")}>
+          <div style={st("display:flex;gap:10px;overflow-x:auto;padding-bottom:2px")}>
+            {p.shots.map((sh, i) => (
+              <button key={i} onClick={sh.on} style={st(sh.style)}>
+                <span style={st("font:400 9.5px 'IBM Plex Mono',monospace;color:#9A90BC")}>{sh.label}</span>
+                <span style={st("position:absolute;right:8px;bottom:7px;font:500 9px 'IBM Plex Mono',monospace;color:#6A57D6;background:rgba(251,246,254,.9);border-radius:7px;padding:3px 6px;box-shadow:2px 2px 6px rgba(120,95,175,.2)")}>ขยาย</span>
+              </button>
+            ))}
+          </div>
+          <div style={st("display:flex;align-items:baseline;gap:8px;margin-top:12px")}>
+            <div style={st("font:500 16px Mitr,sans-serif;color:#3A3254")}>{p.name}</div>
+            <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC")}>{p.src}</div>
+          </div>
+          <div style={st(p.statusStyle)}>{p.status}</div>
+          <div style={st("display:flex;gap:8px;margin-top:12px;flex-wrap:wrap")}>
+            {p.actions.map((ac, i) => (
+              <button key={i} onClick={ac.on} style={st(ac.style)}>{ac.label}</button>
+            ))}
+          </div>
+        </div>
+      ))}
+      {v.pendingEmpty && (
+        <div style={st("border-radius:26px;padding:34px 20px;text-align:center;background:#F1ECFA;box-shadow:inset 5px 6px 14px rgba(120,95,175,.16),inset -4px -5px 12px #ffffff")}>
+          <div style={st("font:500 15px Mitr,sans-serif;color:#5B5375")}>ไม่มีรายการรอบันทึก</div>
+          <div style={st("font:400 12px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:4px")}>ถ่ายรูปของ หรือส่งรูปเข้า LINE Official</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CamScreen({ v }: { v: V }) {
+  return (
+    <div style={st("animation:clayIn .3s ease both")}>
+      <div style={st("border-radius:30px;height:286px;background:repeating-linear-gradient(135deg,#E3DAF3 0 12px,#DAD0EE 12px 24px);box-shadow:inset 6px 8px 18px rgba(90,68,150,.22),inset -5px -6px 14px rgba(255,255,255,.6);display:grid;place-items:center;position:relative")}>
+        <div style={st("text-align:center")}>
+          <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#7C7299;letter-spacing:1.2px")}>CAMERA VIEWFINDER</div>
+          <div style={st("font:400 12px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:6px")}>เล็งไปที่สิ่งของ แล้วกดถ่าย</div>
+        </div>
+        <div style={st("position:absolute;left:16px;top:16px;width:34px;height:34px;border-left:3px solid #C3B7E2;border-top:3px solid #C3B7E2;border-radius:10px 0 0 0")} />
+        <div style={st("position:absolute;right:16px;bottom:16px;width:34px;height:34px;border-right:3px solid #C3B7E2;border-bottom:3px solid #C3B7E2;border-radius:0 0 10px 0")} />
+      </div>
+      <div style={st("display:flex;align-items:center;justify-content:center;gap:20px;margin-top:18px")}>
+        <button onClick={v.camShootItem} style={st("border:none;border-radius:18px;padding:13px 15px;font:500 12.5px Mitr,sans-serif;color:#5B5375;background:#F8F3FD;box-shadow:5px 6px 14px rgba(120,95,175,.16),-4px -5px 12px #ffffff;cursor:pointer")}>ถ่ายสิ่งของ</button>
+        <button onClick={v.camShootItem} style={st("width:76px;height:76px;flex:none;border:none;border-radius:50%;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.4),-6px -8px 16px rgba(255,255,255,.6),inset 3px 4px 8px rgba(255,255,255,.3),inset -4px -6px 10px rgba(40,20,90,.25);cursor:pointer;display:grid;place-items:center")}>
+          <div style={st("width:26px;height:26px;border-radius:50%;border:3px solid rgba(255,255,255,.85)")} />
+        </button>
+        <button onClick={v.camShootPlace} style={st("border:none;border-radius:18px;padding:13px 15px;font:500 12.5px Mitr,sans-serif;color:#5B5375;background:#F8F3FD;box-shadow:5px 6px 14px rgba(120,95,175,.16),-4px -5px 12px #ffffff;cursor:pointer")}>ถ่ายที่เก็บ</button>
+      </div>
+      <div style={st("display:flex;align-items:center;justify-content:space-between;margin:20px 0 9px")}>
+        <div style={st("font:500 13.5px Mitr,sans-serif;color:#5B5375")}>รูปที่ถ่ายไว้ ({v.camCount})</div>
+        <button onClick={v.camClear} style={st(v.camClearStyle)}>ล้างรูป</button>
+      </div>
+      <div style={st("display:flex;gap:10px;overflow-x:auto;min-height:70px")}>
+        {v.camThumbs.map((s2) => (
+          <div key={s2.key} onClick={s2.on} style={st(s2.style + ";cursor:zoom-in")}>
+            <span style={st("font:400 9px 'IBM Plex Mono',monospace;color:#9A90BC")}>{s2.label}</span>
+          </div>
+        ))}
+      </div>
+      <div style={st("font:500 13.5px Mitr,sans-serif;color:#5B5375;margin:18px 0 10px")}>ประเภทของการบันทึก</div>
+      <div style={st("display:flex;gap:9px")}>
+        {v.camEvents.map((e, i) => (
+          <button key={i} onClick={e.on} style={st(e.style)}>{e.label}</button>
+        ))}
+      </div>
+      <button onClick={v.camSave} style={st("width:100%;margin-top:20px;border:none;border-radius:24px;padding:17px;font:500 16px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.34),-5px -7px 14px rgba(255,255,255,.5),inset 2px 3px 6px rgba(255,255,255,.28);cursor:pointer")}>บันทึก</button>
+    </div>
+  );
+}
+
+function LocSuggestList({ rows }: { rows: { name: string; meta: string; on: () => void }[] }) {
+  return (
+    <div style={st("display:flex;flex-direction:column;gap:8px;margin-top:9px")}>
+      {rows.map((l, i) => (
+        <button key={i} onClick={l.on} style={st("border:none;text-align:left;border-radius:16px;padding:12px 14px;background:#F8F3FD;box-shadow:4px 5px 12px rgba(120,95,175,.14),-3px -3px 8px #ffffff;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px")}>
+          <span style={st("font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254")}>{l.name}</span>
+          <span style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC")}>{l.meta}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Stepper({
+  value,
+  dec,
+  inc,
+  size = 42,
+}: {
+  value: number | string;
+  dec: () => void;
+  inc: () => void;
+  size?: number;
+}) {
+  return (
+    <div style={st("display:flex;align-items:center;gap:12px")}>
+      <button onClick={dec} style={st(`width:${size}px;height:${size}px;border:none;border-radius:15px;font:500 20px Mitr,sans-serif;color:#6A57D6;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.18),inset -2px -2px 7px #ffffff;cursor:pointer`)}>–</button>
+      <div style={st("min-width:34px;text-align:center;font:500 18px Mitr,sans-serif;color:#3A3254")}>{value}</div>
+      <button onClick={inc} style={st(`width:${size}px;height:${size}px;border:none;border-radius:15px;font:500 20px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:5px 6px 13px rgba(90,68,180,.3),-3px -4px 9px #ffffff,inset 2px 2px 5px rgba(255,255,255,.3);cursor:pointer`)}>+</button>
+    </div>
+  );
+}
+
+function OwnerChips({ v, label }: { v: V; label: string }) {
+  return (
+    <>
+      <div style={st("font:500 13.5px Mitr,sans-serif;color:#5B5375;margin-bottom:9px")}>{label}</div>
+      <div style={st("display:flex;gap:9px")}>
+        {v.ownerChips.map((o, i) => (
+          <button key={i} onClick={o.on} style={st(o.style)}>{o.label}</button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function AddScreen({ v }: { v: V }) {
+  return (
+    <div style={st("animation:clayIn .3s ease both")}>
+      <OwnerChips v={v} label="ผู้เก็บ" />
+      <div style={st("display:flex;flex-direction:column;gap:14px;margin-top:16px")}>
+        {v.addRows.map((r) => (
+          <div key={r.key} style={st("border-radius:28px;padding:17px;background:#FBF6FE;box-shadow:10px 13px 28px rgba(120,95,175,.18),-6px -8px 18px #ffffff,inset 2px 2px 4px #ffffff")}>
+            <div style={st("display:flex;justify-content:space-between;align-items:center")}>
+              <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC")}>{r.tag}</div>
+              <button onClick={r.remove} style={st(r.removeStyle)}>ลบ</button>
+            </div>
+            <div style={st("display:flex;gap:9px;margin-top:11px")}>
+              <input value={r.name} onChange={r.setName} placeholder="ชื่อของ เช่น สาย usb type-c" style={st("flex:1;min-width:0;border:none;border-radius:18px;padding:14px 16px;font:400 14.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")} />
+              <button onClick={r.mic} style={st("width:50px;flex:none;border:none;border-radius:18px;background:#EFE9FC;box-shadow:4px 5px 12px rgba(120,95,175,.2),-3px -4px 10px #ffffff;cursor:pointer;display:grid;place-items:center")}>
+                <MicIcon />
+              </button>
+            </div>
+            <div style={st("display:flex;gap:8px;margin-top:11px")}>
+              {r.kinds.map((k, i) => (
+                <button key={i} onClick={k.on} style={st(k.style)}>{k.label}</button>
+              ))}
+            </div>
+            {r.isFood && (
+              <div style={st("margin-top:12px;border-radius:20px;padding:13px 14px;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.16),inset -3px -3px 8px #ffffff")}>
+                <div style={st("font:500 12.5px Mitr,sans-serif;color:#5B5375")}>วันหมดอายุ (EXP)</div>
+                <div style={st("display:flex;gap:8px;margin-top:9px")}>
+                  {r.expModes.map((m, i) => (
+                    <button key={i} onClick={m.on} style={st(m.style)}>{m.label}</button>
+                  ))}
+                </div>
+                <div style={st("display:flex;align-items:center;gap:10px;margin-top:10px")}>
+                  <input value={r.expVal} onChange={r.setExp} type={r.expInputType} placeholder={r.expPlaceholder} style={st("flex:1;min-width:0;border:none;border-radius:15px;padding:12px 14px;font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#FBF6FE;box-shadow:3px 4px 9px rgba(120,95,175,.15),-2px -2px 6px #ffffff")} />
+                  <div style={st("font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6")}>{r.expHint}</div>
+                </div>
+              </div>
+            )}
+            <div style={st("display:flex;align-items:center;justify-content:space-between;margin-top:13px")}>
+              <div style={st("font:500 12.5px Mitr,sans-serif;color:#5B5375")}>จำนวน</div>
+              <Stepper value={r.qty} dec={r.dec} inc={r.inc} />
+            </div>
+            <div style={st("font:500 12.5px Mitr,sans-serif;color:#5B5375;margin:14px 0 8px")}>สถานที่เก็บ</div>
+            <div style={st("display:flex;align-items:center;gap:10px;border-radius:18px;padding:4px 6px 4px 15px;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")}>
+              <SearchIcon size={15} />
+              <input value={r.locQuery} onChange={r.setLocQuery} placeholder="พิมพ์ชื่อที่เก็บ เช่น ตู้ / ครัว / KIT" style={st("flex:1;min-width:0;border:none;background:transparent;padding:12px 0;font:400 14px 'IBM Plex Sans Thai',sans-serif;color:#3A3254")} />
+              <button onClick={r.clearLoc} style={st(r.clearLocStyle)}>ล้าง</button>
+            </div>
+            {r.locPicked && (
+              <div style={st("margin-top:9px;display:flex;align-items:center;gap:9px;border-radius:16px;padding:11px 13px;background:#EFE9FC;box-shadow:inset 3px 4px 9px rgba(120,95,175,.18),inset -2px -2px 7px #ffffff")}>
+                <div style={st("font:500 10.5px 'IBM Plex Mono',monospace;color:#5B49C9;background:#FBF6FE;border-radius:9px;padding:5px 8px;box-shadow:2px 3px 7px rgba(120,95,175,.16)")}>{r.locCode}</div>
+                <div style={st("font:400 13px 'IBM Plex Sans Thai',sans-serif;color:#3A3254")}>{r.locName}</div>
+              </div>
+            )}
+            <LocSuggestList rows={r.locSuggest} />
+          </div>
+        ))}
+      </div>
+      <button onClick={v.addRow} style={st("width:100%;margin-top:14px;border:none;border-radius:22px;padding:15px;font:500 14px Mitr,sans-serif;color:#6A57D6;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.16),inset -3px -4px 10px #ffffff;cursor:pointer")}>+ เพิ่มรายการ</button>
+      <button onClick={v.onAddSave} style={st("width:100%;margin-top:12px;border:none;border-radius:24px;padding:17px;font:500 16px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.34),-5px -7px 14px rgba(255,255,255,.5),inset 2px 3px 6px rgba(255,255,255,.28);cursor:pointer")}>{v.addSaveLabel}</button>
+    </div>
+  );
+}
+
+function MoveScreen({ v }: { v: V }) {
+  return (
+    <div style={st("animation:clayIn .3s ease both")}>
+      <OwnerChips v={v} label="ผู้ย้าย" />
+      <div style={st("display:flex;flex-direction:column;gap:14px;margin-top:16px")}>
+        {v.moveRows.map((r) => (
+          <div key={r.key} style={st("border-radius:28px;padding:17px;background:#FBF6FE;box-shadow:10px 13px 28px rgba(120,95,175,.18),-6px -8px 18px #ffffff,inset 2px 2px 4px #ffffff")}>
+            <div style={st("display:flex;justify-content:space-between;align-items:center")}>
+              <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC")}>{r.tag}</div>
+              <button onClick={r.remove} style={st(r.removeStyle)}>ลบ</button>
+            </div>
+            <input value={r.query} onChange={r.setQuery} placeholder="ค้นหาของที่มีอยู่ (พิมพ์ชื่อไม่ได้เอง)" style={st("width:100%;margin-top:11px;border:none;border-radius:18px;padding:14px 16px;font:400 14px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")} />
+            <div style={st("display:flex;flex-direction:column;gap:8px;margin-top:10px")}>
+              {r.suggest.map((sg, i) => (
+                <button key={i} onClick={sg.on} style={st("border:none;text-align:left;border-radius:16px;padding:12px 14px;background:#F8F3FD;box-shadow:4px 5px 12px rgba(120,95,175,.14),-3px -3px 8px #ffffff;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px")}>
+                  <span style={st("font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254")}>{sg.name}</span>
+                  <span style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC")}>{sg.meta}</span>
+                </button>
+              ))}
+            </div>
+            {r.picked && (
+              <div style={st("margin-top:12px;border-radius:20px;padding:14px;background:#EFE9FC;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")}>
+                <div style={st("display:flex;justify-content:space-between;align-items:center;gap:8px")}>
+                  <div style={st("font:500 15px Mitr,sans-serif;color:#3A3254")}>{r.pickedName}</div>
+                  <div style={st("font:500 11.5px Mitr,sans-serif;color:#5B49C9")}>{r.pickedMeta}</div>
+                </div>
+                <div style={st("display:flex;align-items:center;gap:9px;margin-top:10px;flex-wrap:wrap")}>
+                  <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC;letter-spacing:.4px")}>จาก</div>
+                  <div style={st(r.fromCodeStyle)}>{r.fromCode}</div>
+                  <div style={st("font:400 12px 'IBM Plex Sans Thai',sans-serif;color:#5B5375")}>{r.fromName}</div>
+                </div>
+                <div style={st("display:flex;align-items:center;justify-content:space-between;margin-top:12px")}>
+                  <div style={st("font:500 12.5px Mitr,sans-serif;color:#5B5375")}>จำนวนที่ย้าย</div>
+                  <Stepper value={r.qty} dec={r.dec} inc={r.inc} />
+                </div>
+              </div>
+            )}
+            <div style={st("font:500 12.5px Mitr,sans-serif;color:#5B5375;margin:14px 0 8px")}>ย้ายไปที่</div>
+            <div style={st("display:flex;align-items:center;gap:10px;border-radius:18px;padding:4px 6px 4px 15px;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")}>
+              <SearchIcon size={15} />
+              <input value={r.locQuery} onChange={r.setLocQuery} placeholder="พิมพ์ที่เก็บใหม่ เช่น ตู้ / ห้องน้ำ / BAT" style={st("flex:1;min-width:0;border:none;background:transparent;padding:12px 0;font:400 14px 'IBM Plex Sans Thai',sans-serif;color:#3A3254")} />
+              <button onClick={r.clearLoc} style={st(r.clearLocStyle)}>ล้าง</button>
+            </div>
+            {r.locPicked && (
+              <div style={st("margin-top:9px;display:flex;align-items:center;gap:9px;border-radius:16px;padding:11px 13px;background:#EFE9FC;box-shadow:inset 3px 4px 9px rgba(120,95,175,.18),inset -2px -2px 7px #ffffff")}>
+                <div style={st("font:500 10.5px 'IBM Plex Mono',monospace;color:#5B49C9;background:#FBF6FE;border-radius:9px;padding:5px 8px;box-shadow:2px 3px 7px rgba(120,95,175,.16)")}>{r.locCode}</div>
+                <div style={st("font:400 13px 'IBM Plex Sans Thai',sans-serif;color:#3A3254")}>{r.locName}</div>
+              </div>
+            )}
+            <LocSuggestList rows={r.locSuggest} />
+          </div>
+        ))}
+      </div>
+      <button onClick={v.moveAddRow} style={st("width:100%;margin-top:14px;border:none;border-radius:22px;padding:15px;font:500 14px Mitr,sans-serif;color:#6A57D6;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.16),inset -3px -4px 10px #ffffff;cursor:pointer")}>+ เพิ่มรายการ</button>
+      <button onClick={v.onMoveSave} style={st("width:100%;margin-top:12px;border:none;border-radius:24px;padding:17px;font:500 16px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.34),-5px -7px 14px rgba(255,255,255,.5);cursor:pointer")}>{v.moveSaveLabel}</button>
+    </div>
+  );
+}
+
+function UseScreen({ v }: { v: V }) {
+  return (
+    <div style={st("animation:clayIn .3s ease both")}>
+      <div style={st("display:flex;align-items:center;gap:10px;border-radius:22px;padding:5px 6px 5px 16px;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")}>
+        <SearchIcon />
+        <input value={v.useQuery} onChange={v.setUseQuery} placeholder="ค้นหาของที่จะใช้" style={st("flex:1;min-width:0;border:none;background:transparent;padding:13px 0;font:400 14.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254")} />
+      </div>
+      <div style={st("display:flex;align-items:center;justify-content:space-between;margin-top:15px")}>
+        <div style={st("font:500 13px Mitr,sans-serif;color:#5B5375")}>ของทั้งหมดในบ้าน ({v.useCount})</div>
+        <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC")}>เลื่อนขึ้น–ลงเพื่อดูทั้งหมด</div>
+      </div>
+      <div data-scroll="1" style={st("display:flex;flex-direction:column;gap:10px;margin-top:10px;max-height:330px;overflow-y:auto;padding:2px 8px 2px 2px;border-radius:24px")}>
+        {v.useSuggest.map((s2, i) => (
+          <button key={i} onClick={s2.on} style={st(s2.style)}>
+            <div style={st("flex:1;min-width:0;text-align:left")}>
+              <div style={st("font:500 14.5px Mitr,sans-serif;color:#3A3254")}>{s2.name}</div>
+              <div style={st("font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6")}>{s2.loc}</div>
+            </div>
+            <div style={st("display:flex;flex-direction:column;align-items:flex-end;gap:6px")}>
+              <div style={st("font:500 14px Mitr,sans-serif;color:#5B49C9")}>{s2.left}</div>
+              <div style={st(s2.codeStyle)}>{s2.code}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+      {v.usePicked && (
+        <div style={st("margin-top:16px;border-radius:28px;padding:20px;background:#FBF6FE;box-shadow:10px 13px 28px rgba(120,95,175,.18),-6px -8px 18px #ffffff,inset 2px 2px 4px #ffffff")}>
+          <div style={st("font:500 18px Mitr,sans-serif;color:#3A3254")}>{v.useName}</div>
+          <div style={st("font:400 11.5px 'IBM Plex Mono',monospace;color:#6A57D6;margin-top:3px")}>{v.useMeta}</div>
+          <div style={st("display:flex;align-items:center;justify-content:space-between;margin-top:16px")}>
+            <div style={st("font:500 13px Mitr,sans-serif;color:#5B5375")}>จำนวนที่ใช้</div>
+            <Stepper value={v.useQty} dec={v.useDec} inc={v.useInc} size={46} />
+          </div>
+          <div style={st(v.useWarnStyle)}>{v.useWarn}</div>
+          <button onClick={v.onUseSave} style={st("width:100%;margin-top:16px;border:none;border-radius:22px;padding:16px;font:500 15.5px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:8px 11px 22px rgba(90,68,180,.32),-4px -6px 12px rgba(255,255,255,.5);cursor:pointer")}>บันทึกการใช้</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InvScreen({ v }: { v: V }) {
+  return (
+    <div style={st("animation:clayIn .3s ease both")}>
+      <div style={st("display:flex;align-items:center;gap:10px;border-radius:22px;padding:5px 6px 5px 16px;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")}>
+        <SearchIcon />
+        <input value={v.invQuery} onChange={v.setInvQuery} placeholder="พิมพ์ ตู้ / ชื่อของ / รหัส เช่น KIT" style={st("flex:1;min-width:0;border:none;background:transparent;padding:13px 0;font:400 14.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254")} />
+      </div>
+      <div style={st("display:flex;gap:9px;margin-top:13px")}>
+        {v.invModes.map((m, i) => (
+          <button key={i} onClick={m.on} style={st(m.style)}>{m.label}</button>
+        ))}
+      </div>
+      {v.invShowLocs && (
+        <>
+          <div style={st("font:500 13px Mitr,sans-serif;color:#5B5375;margin:20px 0 10px")}>สถานที่ ({v.invLocCount})</div>
+          <div style={st("display:flex;flex-direction:column;gap:11px")}>
+            {v.invLocs.map((l) => (
+              <button key={l.key} onClick={l.on} style={st("border:none;text-align:left;border-radius:22px;padding:15px 17px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff,inset 2px 2px 4px #ffffff;cursor:pointer;display:flex;align-items:center;gap:12px")}>
+                <div style={st("flex:none;border-radius:13px;padding:9px 10px;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:4px 5px 12px rgba(90,68,180,.3),inset 2px 2px 5px rgba(255,255,255,.28);font:500 11px 'IBM Plex Mono',monospace;color:#ffffff;letter-spacing:.5px")}>{l.code}</div>
+                <div style={st("flex:1;min-width:0")}>
+                  <div style={st("font:500 14.5px Mitr,sans-serif;color:#3A3254")}>{l.name}</div>
+                  <div style={st("font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6")}>{l.room}</div>
+                </div>
+                <div style={st("font:500 13px Mitr,sans-serif;color:#5B49C9")}>{l.count}</div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+      {v.invShowItems && (
+        <>
+          <div style={st("font:500 13px Mitr,sans-serif;color:#5B5375;margin:20px 0 10px")}>สิ่งของ ({v.invItemCount})</div>
+          <div style={st("display:flex;flex-direction:column;gap:11px")}>
+            {v.invItems.map((i2) => (
+              <div key={i2.key} style={st("border-radius:22px;padding:15px 17px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff,inset 2px 2px 4px #ffffff")}>
+                <div style={st("display:flex;align-items:center;gap:10px")}>
+                  <div style={st("flex:1;min-width:0")}>
+                    <div style={st("font:500 15px Mitr,sans-serif;color:#3A3254")}>{i2.name}</div>
+                    <div style={st("display:flex;align-items:center;gap:7px;margin-top:5px")}>
+                      <div style={st(i2.codeStyle)}>{i2.code}</div>
+                      <div style={st("font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6")}>{i2.locLabel}</div>
+                    </div>
+                  </div>
+                  <div style={st(i2.qtyStyle)}>{i2.qtyLabel}</div>
+                </div>
+                <div style={st("display:flex;gap:14px;margin-top:10px;flex-wrap:wrap")}>
+                  <div style={st("font:400 11px 'IBM Plex Mono',monospace;color:#9A90BC")}>อัปเดต {i2.date}</div>
+                  <div style={st(i2.expStyle)}>{i2.expLabel}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function HistScreen({ v }: { v: V }) {
+  return (
+    <div style={st("animation:clayIn .3s ease both")}>
+      <div style={st("display:flex;gap:9px")}>
+        {v.histModes.map((m, i) => (
+          <button key={i} onClick={m.on} style={st(m.style)}>{m.label}</button>
+        ))}
+      </div>
+      <div style={st("margin-top:13px")}>
+        {v.histIsDate && (
+          <>
+            <div style={st("display:flex;gap:9px;flex-wrap:wrap")}>
+              {v.histRanges.map((dr, i) => (
+                <button key={i} onClick={dr.on} style={st(dr.style)}>{dr.label}</button>
+              ))}
+            </div>
+            <div style={st("display:flex;gap:10px;margin-top:11px")}>
+              <input value={v.histFrom} onChange={v.setHistFrom} type="date" style={st("flex:1;min-width:0;border:none;border-radius:16px;padding:13px 14px;font:400 13px 'IBM Plex Mono',monospace;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")} />
+              <input value={v.histTo} onChange={v.setHistTo} type="date" style={st("flex:1;min-width:0;border:none;border-radius:16px;padding:13px 14px;font:400 13px 'IBM Plex Mono',monospace;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")} />
+            </div>
+          </>
+        )}
+        {v.histIsLoc && (
+          <select value={v.histLoc} onChange={v.setHistLoc} style={st("width:100%;border:none;appearance:none;border-radius:18px;padding:14px 16px;font:400 14px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff;cursor:pointer")}>
+            <option value="">— ทุกสถานที่ —</option>
+            {v.locOptions.map((l) => (
+              <option key={l.code} value={l.code}>{l.label}</option>
+            ))}
+          </select>
+        )}
+        {v.histIsItem && (
+          <input value={v.histQuery} onChange={v.setHistQuery} placeholder="พิมพ์ชื่อของ เช่น สบู่" style={st("width:100%;border:none;border-radius:18px;padding:14px 16px;font:400 14px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")} />
+        )}
+      </div>
+      <div style={st("font:400 11px 'IBM Plex Mono',monospace;color:#9A90BC;margin:18px 0 10px;letter-spacing:.4px")}>AUDIT TRAIL · ดูได้เท่านั้น แก้ไขไม่ได้ · {v.histCount} รายการ</div>
+      <div style={st("display:flex;flex-direction:column;gap:0")}>
+        {v.histList.map((hh) => (
+          <div key={hh.key} style={st("display:flex;gap:13px")}>
+            <div style={st("width:34px;flex:none;display:flex;flex-direction:column;align-items:center")}>
+              <div style={st(hh.dot)} />
+              <div style={st("flex:1;width:2px;background:#DED5F0;border-radius:2px")} />
+            </div>
+            <div style={st("flex:1;min-width:0;padding-bottom:14px")}>
+              <div style={st(hh.cardStyle)}>
+                <div style={st("display:flex;justify-content:space-between;gap:8px;align-items:baseline")}>
+                  <div style={st(hh.titleStyle)}>{hh.title}</div>
+                  <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC")}>{hh.date}</div>
+                </div>
+                <div style={st("display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px")}>
+                  <div style={st(hh.codeStyle)}>{hh.codeLabel}</div>
+                  <div style={st("font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6")}>{hh.detail}</div>
+                </div>
+                <div style={st("display:flex;align-items:center;gap:8px;margin-top:9px")}>
+                  <div style={st(hh.avatarStyle)}>{hh.initial}</div>
+                  <div style={st(hh.whoStyle)}>{hh.who}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ShopScreen({ v }: { v: V }) {
+  return (
+    <div style={st("animation:clayIn .3s ease both")}>
+      {v.shopGroups.map((g) => (
+        <div key={g.key} style={st("margin-bottom:22px")}>
+          <div style={st("display:flex;align-items:center;gap:9px;margin-bottom:11px")}>
+            <div style={st(g.dot)} />
+            <div style={st("font:500 14.5px Mitr,sans-serif;color:#3A3254")}>{g.title}</div>
+            <div style={st("font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6")}>{g.count}</div>
+          </div>
+          <div style={st("display:flex;flex-direction:column;gap:11px")}>
+            {g.rows.map((r) => (
+              <div key={r.key} style={st(r.cardStyle)}>
+                <button onClick={r.on} style={st(r.tickStyle)}>{r.tick}</button>
+                <div style={st("flex:1;min-width:0")}>
+                  <div style={st(r.nameStyle)}>{r.name}</div>
+                  <div style={st("font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6")}>{r.detail}</div>
+                </div>
+                <div style={st(r.codeStyle)}>{r.code}</div>
+              </div>
+            ))}
+            {g.empty && (
+              <div style={st("border-radius:20px;padding:18px;text-align:center;font:400 12.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.14),inset -3px -3px 9px #ffffff")}>ไม่มีรายการ</div>
+            )}
+          </div>
+        </div>
+      ))}
+      <div style={st("border-radius:22px;padding:14px 16px;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.16),inset -3px -4px 10px #ffffff")}>
+        <div style={st("font:400 12.5px/1.6 'IBM Plex Sans Thai',sans-serif;color:#5B5375")}>ติ๊กแล้วจะย้ายไปกลุ่ม “ซื้อแล้ว” แต่ยังไม่เพิ่ม stock จนกว่าจะบันทึก ADD</div>
+      </div>
+    </div>
+  );
+}
+
+function SetScreen({ v }: { v: V }) {
+  return (
+    <div style={st("animation:clayIn .3s ease both")}>
+      <div style={st("font:500 13.5px Mitr,sans-serif;color:#5B5375;margin-bottom:10px")}>โทนสี clay</div>
+      <div style={st("display:flex;gap:11px")}>
+        {v.tones.map((t) => (
+          <button key={t.key} onClick={t.on} style={st(t.style)}>
+            <div style={st(t.swatch)} />
+            <div style={st("font:500 12.5px Mitr,sans-serif;color:#3A3254;margin-top:8px")}>{t.label}</div>
+          </button>
+        ))}
+      </div>
+      <div style={st("display:flex;gap:9px;margin-top:22px")}>
+        {v.setTabs.map((t, i) => (
+          <button key={i} onClick={t.on} style={st(t.style)}>{t.label}</button>
+        ))}
+      </div>
+
+      {v.isSetPlaces && (
+        <>
+          <div style={st("display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px;gap:10px")}>
+            <div style={st("font:500 13.5px Mitr,sans-serif;color:#5B5375")}>สถานที่จัดเก็บ ({v.placeCount})</div>
+            <button onClick={v.placeAddOpen} style={st("border:none;cursor:pointer;border-radius:15px;padding:10px 14px;font:500 12.5px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:5px 7px 15px rgba(90,68,180,.32),-3px -4px 10px rgba(255,255,255,.6)")}>+ เพิ่มสถานที่</button>
+          </div>
+          <div style={st("display:flex;align-items:center;gap:10px;border-radius:20px;padding:4px 6px 4px 15px;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")}>
+            <SearchIcon size={15} />
+            <input value={v.placeQuery} onChange={v.setPlaceQuery} placeholder="ค้นหาชื่อสถานที่ / ห้อง / รหัส" style={st("flex:1;min-width:0;border:none;background:transparent;padding:12px 0;font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254")} />
+          </div>
+          <div style={st("display:flex;flex-direction:column;gap:11px;margin-top:13px")}>
+            {v.placeRows.map((p) => (
+              <div key={p.key} style={st("border-radius:24px;padding:15px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff,inset 2px 2px 4px #ffffff")}>
+                <div style={st("display:flex;align-items:center;gap:10px")}>
+                  <input value={p.code} onChange={p.setCode} style={st("width:104px;flex:none;border:none;border-radius:13px;padding:10px 11px;text-align:center;font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.6px;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:4px 5px 12px rgba(90,68,180,.3),inset 2px 2px 5px rgba(255,255,255,.28)")} />
+                  <input value={p.name} onChange={p.setName} placeholder="ชื่อที่เก็บ" style={st("flex:1;min-width:0;border:none;border-radius:14px;padding:11px 13px;font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.16),inset -2px -2px 7px #ffffff")} />
+                  <button onClick={p.del} style={st("width:30px;height:30px;flex:none;border:none;border-radius:10px;cursor:pointer;background:#FFE9E9;box-shadow:inset 2px 2px 6px rgba(201,82,79,.16);display:grid;place-items:center")}>
+                    <TrashIcon />
+                  </button>
+                </div>
+                <div style={st("display:flex;align-items:center;gap:10px;margin-top:10px")}>
+                  <input value={p.room} onChange={p.setRoom} placeholder="ห้อง" style={st("flex:1;min-width:0;border:none;border-radius:14px;padding:11px 13px;font:400 13px 'IBM Plex Sans Thai',sans-serif;color:#5B5375;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.16),inset -2px -2px 7px #ffffff")} />
+                  <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC")}>{p.itemCount}</div>
+                </div>
+              </div>
+            ))}
+            {v.placeEmpty && (
+              <div style={st("border-radius:20px;padding:22px;text-align:center;font:400 12.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.14),inset -3px -3px 9px #ffffff")}>ไม่พบสถานที่ที่ค้นหา</div>
+            )}
+          </div>
+        </>
+      )}
+
+      {v.isSetItems && (
+        <>
+          <div style={st("display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px;gap:10px")}>
+            <div style={st("font:500 13.5px Mitr,sans-serif;color:#5B5375")}>รายการของในบ้าน ({v.setCount})</div>
+            <button onClick={v.setAddOpen} style={st("border:none;cursor:pointer;border-radius:15px;padding:10px 14px;font:500 12.5px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:5px 7px 15px rgba(90,68,180,.32),-3px -4px 10px rgba(255,255,255,.6);display:flex;align-items:center;gap:6px")}>+ เพิ่มของ</button>
+          </div>
+          <div style={st("display:flex;align-items:center;gap:10px;border-radius:20px;padding:4px 6px 4px 15px;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")}>
+            <SearchIcon size={15} />
+            <input value={v.setQuery} onChange={v.setSetQuery} placeholder="ค้นหาชื่อของ หรือรหัสที่เก็บ" style={st("flex:1;min-width:0;border:none;background:transparent;padding:12px 0;font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254")} />
+          </div>
+          <div style={st("display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:13px")}>
+            {v.setRows.map((r) => (
+              <div key={r.key} style={st("border-radius:22px;padding:13px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff,inset 2px 2px 4px #ffffff;display:flex;flex-direction:column;gap:9px")}>
+                <div style={st("display:flex;align-items:flex-start;justify-content:space-between;gap:6px")}>
+                  <div style={st("font:500 13.5px/1.3 Mitr,sans-serif;color:#3A3254;min-width:0")}>{r.name}</div>
+                  <button onClick={r.del} style={st("width:26px;height:26px;flex:none;border:none;border-radius:9px;cursor:pointer;background:#FFE9E9;box-shadow:inset 2px 2px 6px rgba(201,82,79,.16);display:grid;place-items:center")}>
+                    <TrashIcon />
+                  </button>
+                </div>
+                <div style={st(r.codeStyle)}>{r.code}</div>
+                <div style={st("font:400 10.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6")}>มีอยู่ {r.qty} · {r.kindLabel}</div>
+                <button onClick={r.toggleTrack} style={st(r.trackStyle)}>{r.trackLabel}</button>
+                {r.fields.map((f, i) => (
+                  <div key={i} style={st("border-radius:15px;padding:9px 10px;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.16),inset -2px -2px 7px #ffffff")}>
+                    <div style={st("font:400 9.5px 'IBM Plex Mono',monospace;color:#8B82A6;letter-spacing:.4px")}>{f.label}</div>
+                    <div style={st("display:flex;align-items:center;justify-content:space-between;margin-top:5px")}>
+                      <button onClick={f.dec} style={st("width:28px;height:28px;border:none;border-radius:10px;font:500 15px Mitr,sans-serif;color:#6A57D6;background:#FBF6FE;box-shadow:3px 3px 8px rgba(120,95,175,.16),-2px -2px 6px #ffffff;cursor:pointer")}>–</button>
+                      <div style={st("font:500 15px Mitr,sans-serif;color:#3A3254")}>{f.value}</div>
+                      <button onClick={f.inc} style={st("width:28px;height:28px;border:none;border-radius:10px;font:500 15px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:3px 4px 9px rgba(90,68,180,.28),-2px -2px 6px #ffffff;cursor:pointer")}>+</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          {v.setEmpty && (
+            <div style={st("margin-top:12px;border-radius:20px;padding:22px;text-align:center;font:400 12.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.14),inset -3px -3px 9px #ffffff")}>ไม่พบรายการที่ค้นหา</div>
+          )}
+        </>
+      )}
+
+      <div style={st("margin-top:20px;border-radius:22px;padding:16px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff")}>
+        <div style={st("font:500 14px Mitr,sans-serif;color:#3A3254")}>การแจ้งเตือน</div>
+        <div style={st("font:400 12.5px/1.7 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:6px;white-space:pre-line")}>{"ของกิน: เตือน 3 วัน และ 1 วันก่อน EXP\nของใช้: เตือน 7 วันก่อนหมด และวันที่หมดจริง\nสรุปรวมผ่าน LINE ทุกวัน 09:00"}</div>
+      </div>
+    </div>
+  );
+}
+
+function ViewerLayer({ v }: { v: V }) {
+  return (
+    <div onClick={v.closeViewer} style={st("position:absolute;inset:0;z-index:70;background:rgba(38,30,62,.86);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;flex-direction:column;padding:56px 18px 34px;animation:clayIn .22s ease both")}>
+      <div style={st("display:flex;align-items:center;justify-content:space-between;gap:10px")}>
+        <div style={st("min-width:0")}>
+          <div style={st("font:500 15px Mitr,sans-serif;color:#ffffff")}>{v.viewerLabel}</div>
+          <div style={st("font:400 11px 'IBM Plex Mono',monospace;color:#C6B9E6;margin-top:2px")}>{v.viewerMeta}</div>
+        </div>
+        <button onClick={v.closeViewer} style={st("width:40px;height:40px;flex:none;border:none;border-radius:14px;cursor:pointer;background:rgba(255,255,255,.14);box-shadow:inset 2px 3px 8px rgba(255,255,255,.22);display:grid;place-items:center")}>
+          <CloseIcon />
+        </button>
+      </div>
+      <div onClick={(e) => e.stopPropagation()} style={st("flex:1;margin-top:18px;border-radius:30px;background:repeating-linear-gradient(135deg,#E9E1F6 0 16px,#DED4EE 16px 32px);box-shadow:inset 6px 8px 20px rgba(90,68,150,.24),inset -5px -6px 16px rgba(255,255,255,.6);display:grid;place-items:center;text-align:center;padding:24px")}>
+        <div>
+          <div style={st("font:400 11px 'IBM Plex Mono',monospace;color:#7C7299;letter-spacing:1.2px")}>FULL SCREEN PHOTO</div>
+          <div style={st("font:500 17px Mitr,sans-serif;color:#3A3254;margin-top:8px")}>{v.viewerLabel}</div>
+        </div>
+      </div>
+      <div style={st("display:flex;align-items:center;justify-content:center;gap:12px;margin-top:16px")}>
+        <button onClick={(e) => { e.stopPropagation(); v.viewerPrev(); }} style={st("border:none;cursor:pointer;border-radius:16px;padding:12px 16px;font:500 12.5px Mitr,sans-serif;color:#ffffff;background:rgba(255,255,255,.16);box-shadow:inset 2px 3px 8px rgba(255,255,255,.22)")}>‹ ก่อนหน้า</button>
+        <button onClick={(e) => { e.stopPropagation(); v.viewerNext(); }} style={st("border:none;cursor:pointer;border-radius:16px;padding:12px 16px;font:500 12.5px Mitr,sans-serif;color:#ffffff;background:rgba(255,255,255,.16);box-shadow:inset 2px 3px 8px rgba(255,255,255,.22)")}>ถัดไป ›</button>
+      </div>
+    </div>
+  );
+}
+
+function SheetLayer({ v }: { v: V }) {
+  return (
+    <div onClick={v.closeSheet} style={st("position:absolute;inset:0;background:rgba(58,50,84,.34);z-index:60;display:flex;align-items:flex-end")}>
+      <div onClick={(e) => e.stopPropagation()} style={st("width:100%;border-radius:34px 34px 0 0;padding:22px 22px 40px;background:#F6F0FC;box-shadow:0 -12px 34px rgba(70,50,120,.28),inset 3px 5px 10px #ffffff;animation:clayUp .26s cubic-bezier(.3,1.2,.5,1) both")}>
+        <div style={st("width:46px;height:5px;border-radius:99px;background:#DCD2ED;margin:0 auto 16px")} />
+        <div style={st("font:500 18px/1.4 Mitr,sans-serif;color:#3A3254")}>{v.sheetTitle}</div>
+        <div style={st("font:400 12.5px/1.6 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:5px")}>{v.sheetSub}</div>
+
+        {v.sheetHasInput && (
+          <input value={v.sheetInputVal} onChange={v.sheetInputSet} placeholder={v.sheetInputPh} style={st("width:100%;margin-top:15px;border:none;border-radius:18px;padding:15px 16px;font:400 14.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")} />
+        )}
+
+        {v.sheetHasChips && (
+          <div style={st("display:flex;gap:9px;margin-top:11px")}>
+            {v.sheetChips.map((c, i) => (
+              <button key={i} onClick={c.on} style={st(c.style)}>{c.label}</button>
+            ))}
+          </div>
+        )}
+
+        {v.sheetHasPlace && (
+          <div style={st("margin-top:14px")}>
+            <div style={st("font:500 12.5px Mitr,sans-serif;color:#5B5375;margin-bottom:8px")}>Location หลัก</div>
+            <div style={st("display:flex;gap:8px;flex-wrap:wrap")}>
+              {v.placeRoomChips.map((c, i) => (
+                <button key={i} onClick={c.on} style={st(c.style)}>{c.label}</button>
+              ))}
+            </div>
+            {v.placeRoomIsNew && (
+              <input value={v.placeRoomCustom} onChange={v.setPlaceRoomCustom} placeholder="ชื่อ location หลักใหม่ เช่น ห้องทำงาน" style={st("width:100%;margin-top:10px;border:none;border-radius:16px;padding:13px 15px;font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")} />
+            )}
+            <div style={st("font:500 12.5px Mitr,sans-serif;color:#5B5375;margin:16px 0 8px")}>รหัส location (แก้ได้ · ห้ามซ้ำ)</div>
+            <div style={st("display:flex;align-items:center;gap:10px")}>
+              <input value={v.placeCodeVal} onChange={v.setPlaceCode} style={st("width:132px;flex:none;border:none;border-radius:14px;padding:13px 12px;text-align:center;font:500 13px 'IBM Plex Mono',monospace;letter-spacing:.7px;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:4px 6px 13px rgba(90,68,180,.3),inset 2px 2px 5px rgba(255,255,255,.28)")} />
+              <div style={st("flex:1;font:400 11.5px/1.5 'IBM Plex Sans Thai',sans-serif;color:#8B82A6")}>{v.placeCodeHint}</div>
+            </div>
+          </div>
+        )}
+
+        <div style={st("display:flex;flex-direction:column;gap:11px;margin-top:18px")}>
+          {v.sheetActions.map((a, i) => (
+            <button key={i} onClick={a.on} style={st(a.style)}>{a.label}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

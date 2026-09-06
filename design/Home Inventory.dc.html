@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><meta name="design_doc_mode" content="canvas"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Mitr:wght@300;400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"><style>body{margin:0;background:#E7DFF3;font-family:"IBM Plex Sans Thai",system-ui,sans-serif}a{color:#6A57D6}a:hover{color:#4E3CB8}*{-webkit-tap-highlight-color:transparent;box-sizing:border-box}input,button,select{font-family:inherit}input:focus,select:focus{outline:none}::-webkit-scrollbar{width:0;height:0}[data-scroll]::-webkit-scrollbar{width:6px}[data-scroll]::-webkit-scrollbar-thumb{background:#C6B9E6;border-radius:99px}[data-scroll]::-webkit-scrollbar-track{background:rgba(120,95,175,.1);border-radius:99px}@keyframes clayIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}@keyframes clayUp{from{transform:translateY(105%)}to{transform:none}}</style></helmet>
+<div style="min-height:100%;display:flex;align-items:flex-start;justify-content:center;padding:28px;background:radial-gradient(120% 90% at 20% 0%,#F5EFFC 0%,#E6DDF3 55%,#DCD2ED 100%)">
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" width="{{ dw }}" height="{{ dh }}" style="width:440px;height:956px;flex:none" hint-size="440px,956px">
+
+<div style="{{ themeWrap }}">
+<div style="height:100%;display:flex;flex-direction:column;background:linear-gradient(180deg,#F5EFFC 0%,#EDE5F7 100%);position:relative;overflow:hidden">
+
+<div style="padding:56px 22px 10px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex:none">
+<div style="min-width:0">
+<div style="display:flex;align-items:center;gap:9px">
+<button onClick="{{ back }}" style="{{ backStyle }}">
+<svg width="8" height="14" viewBox="0 0 8 14"><path d="M6.5 1 L1.5 7 L6.5 13" fill="none" stroke="#6A57D6" stroke-width="2.2" stroke-linecap="round"/></svg>
+</button>
+<div style="font:500 24px/1.3 Mitr,sans-serif;color:#3A3254">{{ hTitle }}</div>
+</div>
+<div style="font:400 12.5px/1.45 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:2px">{{ hSub }}</div>
+</div>
+<button onClick="{{ goSet }}" style="width:46px;height:46px;flex:none;border:none;border-radius:16px;background:#F8F3FD;box-shadow:6px 7px 16px rgba(120,95,175,.2),-5px -6px 14px #ffffff,inset 1px 1px 3px #ffffff;cursor:pointer;display:grid;place-items:center">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6A57D6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/></svg>
+</button>
+</div>
+
+<div style="flex:1;overflow-y:auto;padding:8px 22px 140px">
+
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+<div style="animation:clayIn .3s ease both">
+<div style="border-radius:30px;padding:20px 22px;background:linear-gradient(145deg,#7A6AE2 0%,#5B49C9 100%);box-shadow:12px 16px 30px rgba(90,68,180,.34),-6px -8px 18px rgba(255,255,255,.55),inset 3px 4px 8px rgba(255,255,255,.28),inset -4px -6px 12px rgba(40,20,90,.22)">
+<div style="font:400 11.5px 'IBM Plex Mono',monospace;color:#D6CEF7;letter-spacing:.6px">{{ todayLabel }}</div>
+<div style="font:500 19px/1.4 Mitr,sans-serif;color:#ffffff;margin-top:6px">{{ homeHeadline }}</div>
+<div style="display:flex;gap:10px;margin-top:16px">
+<sc-for list="{{ stats }}" as="s" hint-placeholder-count="3">
+<div style="flex:1;background:rgba(255,255,255,.16);border-radius:18px;padding:11px 12px;box-shadow:inset 2px 3px 6px rgba(40,20,90,.18)">
+<div style="{{ s.numStyle }}">{{ s.num }}</div>
+<div style="font:400 11px 'IBM Plex Sans Thai',sans-serif;color:#DDD6F8">{{ s.label }}</div>
+</div>
+</sc-for>
+</div>
+</div>
+
+<button onClick="{{ goPending }}" style="width:100%;margin-top:15px;border:none;text-align:left;border-radius:26px;padding:15px 18px;background:#FBF6FE;box-shadow:10px 12px 26px rgba(120,95,175,.18),-6px -8px 18px #ffffff,inset 2px 2px 4px #ffffff;cursor:pointer;display:flex;align-items:center;gap:14px">
+<div style="width:44px;height:44px;flex:none;border-radius:15px;background:#FFEFE4;box-shadow:inset 3px 4px 8px rgba(200,120,70,.2),3px 4px 10px rgba(220,140,90,.18);display:grid;place-items:center;font:500 17px Mitr,sans-serif;color:#DE7440">{{ pendingCount }}</div>
+<div style="flex:1">
+<div style="font:500 15px Mitr,sans-serif;color:#3A3254">รายการรอบันทึก</div>
+<div style="font:400 12px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6">รูปจากแอพ และ LINE Official รออยู่</div>
+</div>
+<svg width="9" height="15" viewBox="0 0 9 15"><path d="M1.5 1.5 L7 7.5 L1.5 13.5" fill="none" stroke="#B6ACD4" stroke-width="2.2" stroke-linecap="round"/></svg>
+</button>
+
+<div style="font:500 14px Mitr,sans-serif;color:#5B5375;margin:22px 0 10px">ทำอะไรดี</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:13px">
+<sc-for list="{{ quickActions }}" as="q" hint-placeholder-count="4">
+<button onClick="{{ q.on }}" style="border:none;text-align:left;border-radius:24px;padding:16px;background:#FBF6FE;box-shadow:9px 11px 24px rgba(120,95,175,.17),-6px -7px 16px #ffffff,inset 2px 2px 4px #ffffff;cursor:pointer">
+<div style="{{ q.dot }}">{{ q.sign }}</div>
+<div style="font:500 15px Mitr,sans-serif;color:#3A3254;margin-top:11px">{{ q.label }}</div>
+<div style="font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6">{{ q.sub }}</div>
+</button>
+</sc-for>
+</div>
+
+<sc-if value="{{ showAlerts }}" hint-placeholder-val="{{ true }}">
+<div style="font:500 14px Mitr,sans-serif;color:#5B5375;margin:24px 0 10px">การ์ดเตือน</div>
+<div style="display:flex;flex-direction:column;gap:12px">
+<sc-for list="{{ alerts }}" as="a" hint-placeholder-count="3">
+<div style="border-radius:24px;padding:14px 16px;background:#FBF6FE;box-shadow:9px 11px 24px rgba(120,95,175,.16),-6px -7px 16px #ffffff;display:flex;align-items:center;gap:12px">
+<div style="{{ a.pill }}">{{ a.tag }}</div>
+<div style="flex:1;min-width:0">
+<div style="font:500 14.5px Mitr,sans-serif;color:#3A3254">{{ a.name }}</div>
+<div style="font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6">{{ a.detail }}</div>
+</div>
+<button onClick="{{ a.on }}" style="border:none;flex:none;border-radius:14px;padding:9px 12px;font:500 12px Mitr,sans-serif;color:#5B49C9;background:#EFE9FC;box-shadow:inset 1px 1px 3px #ffffff,3px 4px 10px rgba(120,95,175,.18);cursor:pointer">{{ a.cta }}</button>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<div style="margin-top:20px;border-radius:22px;padding:14px 16px;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.16),inset -3px -4px 10px #ffffff">
+<div style="font:400 10.5px 'IBM Plex Mono',monospace;color:#8B82A6;letter-spacing:.5px">LINE DAILY SUMMARY · 09:00</div>
+<div style="font:400 12.5px/1.65 'IBM Plex Sans Thai',sans-serif;color:#5B5375;margin-top:6px;white-space:pre-line">{{ lineSummary }}</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isPending }}" hint-placeholder-val="{{ false }}">
+<div style="animation:clayIn .3s ease both;display:flex;flex-direction:column;gap:14px">
+<sc-for list="{{ pendingList }}" as="p" hint-placeholder-count="3">
+<div style="border-radius:28px;padding:14px;background:#FBF6FE;box-shadow:10px 13px 28px rgba(120,95,175,.18),-6px -8px 18px #ffffff,inset 2px 2px 4px #ffffff">
+<div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:2px">
+<sc-for list="{{ p.shots }}" as="s" hint-placeholder-count="2">
+<button onClick="{{ s.on }}" style="{{ s.style }}"><span style="font:400 9.5px 'IBM Plex Mono',monospace;color:#9A90BC">{{ s.label }}</span><span style="position:absolute;right:8px;bottom:7px;font:500 9px 'IBM Plex Mono',monospace;color:#6A57D6;background:rgba(251,246,254,.9);border-radius:7px;padding:3px 6px;box-shadow:2px 2px 6px rgba(120,95,175,.2)">ขยาย</span></button>
+</sc-for>
+</div>
+<div style="display:flex;align-items:baseline;gap:8px;margin-top:12px">
+<div style="font:500 16px Mitr,sans-serif;color:#3A3254">{{ p.name }}</div>
+<div style="font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC">{{ p.src }}</div>
+</div>
+<div style="{{ p.statusStyle }}">{{ p.status }}</div>
+<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+<sc-for list="{{ p.actions }}" as="ac" hint-placeholder-count="2">
+<button onClick="{{ ac.on }}" style="{{ ac.style }}">{{ ac.label }}</button>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{ pendingEmpty }}" hint-placeholder-val="{{ false }}">
+<div style="border-radius:26px;padding:34px 20px;text-align:center;background:#F1ECFA;box-shadow:inset 5px 6px 14px rgba(120,95,175,.16),inset -4px -5px 12px #ffffff">
+<div style="font:500 15px Mitr,sans-serif;color:#5B5375">ไม่มีรายการรอบันทึก</div>
+<div style="font:400 12px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:4px">ถ่ายรูปของ หรือส่งรูปเข้า LINE Official</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isCam }}" hint-placeholder-val="{{ false }}">
+<div style="animation:clayIn .3s ease both">
+<div style="border-radius:30px;height:286px;background:repeating-linear-gradient(135deg,#E3DAF3 0 12px,#DAD0EE 12px 24px);box-shadow:inset 6px 8px 18px rgba(90,68,150,.22),inset -5px -6px 14px rgba(255,255,255,.6);display:grid;place-items:center;position:relative">
+<div style="text-align:center">
+<div style="font:400 10.5px 'IBM Plex Mono',monospace;color:#7C7299;letter-spacing:1.2px">CAMERA VIEWFINDER</div>
+<div style="font:400 12px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:6px">เล็งไปที่สิ่งของ แล้วกดถ่าย</div>
+</div>
+<div style="position:absolute;left:16px;top:16px;width:34px;height:34px;border-left:3px solid #C3B7E2;border-top:3px solid #C3B7E2;border-radius:10px 0 0 0"></div>
+<div style="position:absolute;right:16px;bottom:16px;width:34px;height:34px;border-right:3px solid #C3B7E2;border-bottom:3px solid #C3B7E2;border-radius:0 0 10px 0"></div>
+</div>
+<div style="display:flex;align-items:center;justify-content:center;gap:20px;margin-top:18px">
+<button onClick="{{ camShootItem }}" style="border:none;border-radius:18px;padding:13px 15px;font:500 12.5px Mitr,sans-serif;color:#5B5375;background:#F8F3FD;box-shadow:5px 6px 14px rgba(120,95,175,.16),-4px -5px 12px #ffffff;cursor:pointer">ถ่ายสิ่งของ</button>
+<button onClick="{{ camShootItem }}" style="width:76px;height:76px;flex:none;border:none;border-radius:50%;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.4),-6px -8px 16px rgba(255,255,255,.6),inset 3px 4px 8px rgba(255,255,255,.3),inset -4px -6px 10px rgba(40,20,90,.25);cursor:pointer;display:grid;place-items:center">
+<div style="width:26px;height:26px;border-radius:50%;border:3px solid rgba(255,255,255,.85)"></div>
+</button>
+<button onClick="{{ camShootPlace }}" style="border:none;border-radius:18px;padding:13px 15px;font:500 12.5px Mitr,sans-serif;color:#5B5375;background:#F8F3FD;box-shadow:5px 6px 14px rgba(120,95,175,.16),-4px -5px 12px #ffffff;cursor:pointer">ถ่ายที่เก็บ</button>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 9px">
+<div style="font:500 13.5px Mitr,sans-serif;color:#5B5375">รูปที่ถ่ายไว้ ({{ camCount }})</div>
+<button onClick="{{ camClear }}" style="{{ camClearStyle }}">ล้างรูป</button>
+</div>
+<div style="display:flex;gap:10px;overflow-x:auto;min-height:70px">
+<sc-for list="{{ camThumbs }}" as="s" hint-placeholder-count="1">
+<div style="{{ s.style }}"><span style="font:400 9px 'IBM Plex Mono',monospace;color:#9A90BC">{{ s.label }}</span></div>
+</sc-for>
+</div>
+<div style="font:500 13.5px Mitr,sans-serif;color:#5B5375;margin:18px 0 10px">ประเภทของการบันทึก</div>
+<div style="display:flex;gap:9px">
+<sc-for list="{{ camEvents }}" as="e" hint-placeholder-count="3">
+<button onClick="{{ e.on }}" style="{{ e.style }}">{{ e.label }}</button>
+</sc-for>
+</div>
+<button onClick="{{ camSave }}" style="width:100%;margin-top:20px;border:none;border-radius:24px;padding:17px;font:500 16px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.34),-5px -7px 14px rgba(255,255,255,.5),inset 2px 3px 6px rgba(255,255,255,.28);cursor:pointer">บันทึก</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ isAdd }}" hint-placeholder-val="{{ false }}">
+<div style="animation:clayIn .3s ease both">
+<div style="font:500 13.5px Mitr,sans-serif;color:#5B5375;margin-bottom:9px">ผู้เก็บ</div>
+<div style="display:flex;gap:9px">
+<sc-for list="{{ ownerChips }}" as="o" hint-placeholder-count="2">
+<button onClick="{{ o.on }}" style="{{ o.style }}">{{ o.label }}</button>
+</sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px;margin-top:16px">
+<sc-for list="{{ addRows }}" as="r" hint-placeholder-count="1">
+<div style="border-radius:28px;padding:17px;background:#FBF6FE;box-shadow:10px 13px 28px rgba(120,95,175,.18),-6px -8px 18px #ffffff,inset 2px 2px 4px #ffffff">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div style="font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC">{{ r.tag }}</div>
+<button onClick="{{ r.remove }}" style="{{ r.removeStyle }}">ลบ</button>
+</div>
+<div style="display:flex;gap:9px;margin-top:11px">
+<input value="{{ r.name }}" onChange="{{ r.setName }}" placeholder="ชื่อของ เช่น สาย usb type-c" style="flex:1;min-width:0;border:none;border-radius:18px;padding:14px 16px;font:400 14.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff"/>
+<button onClick="{{ r.mic }}" style="width:50px;flex:none;border:none;border-radius:18px;background:#EFE9FC;box-shadow:4px 5px 12px rgba(120,95,175,.2),-3px -4px 10px #ffffff;cursor:pointer;display:grid;place-items:center">
+<svg width="15" height="20" viewBox="0 0 15 20"><rect x="4.5" y="1" width="6" height="10" rx="3" fill="#6A57D6"/><path d="M2 9.5a5.5 5.5 0 0 0 11 0" fill="none" stroke="#6A57D6" stroke-width="2" stroke-linecap="round"/><rect x="6.6" y="15" width="1.8" height="4" rx=".9" fill="#6A57D6"/></svg>
+</button>
+</div>
+<div style="display:flex;gap:8px;margin-top:11px">
+<sc-for list="{{ r.kinds }}" as="k" hint-placeholder-count="2">
+<button onClick="{{ k.on }}" style="{{ k.style }}">{{ k.label }}</button>
+</sc-for>
+</div>
+<sc-if value="{{ r.isFood }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:12px;border-radius:20px;padding:13px 14px;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.16),inset -3px -3px 8px #ffffff">
+<div style="font:500 12.5px Mitr,sans-serif;color:#5B5375">วันหมดอายุ (EXP)</div>
+<div style="display:flex;gap:8px;margin-top:9px">
+<sc-for list="{{ r.expModes }}" as="m" hint-placeholder-count="2">
+<button onClick="{{ m.on }}" style="{{ m.style }}">{{ m.label }}</button>
+</sc-for>
+</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+<input value="{{ r.expVal }}" onChange="{{ r.setExp }}" type="{{ r.expInputType }}" placeholder="{{ r.expPlaceholder }}" style="flex:1;min-width:0;border:none;border-radius:15px;padding:12px 14px;font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#FBF6FE;box-shadow:3px 4px 9px rgba(120,95,175,.15),-2px -2px 6px #ffffff"/>
+<div style="font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6">{{ r.expHint }}</div>
+</div>
+</div>
+</sc-if>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-top:13px">
+<div style="font:500 12.5px Mitr,sans-serif;color:#5B5375">จำนวน</div>
+<div style="display:flex;align-items:center;gap:12px">
+<button onClick="{{ r.dec }}" style="width:42px;height:42px;border:none;border-radius:15px;font:500 20px Mitr,sans-serif;color:#6A57D6;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.18),inset -2px -2px 7px #ffffff;cursor:pointer">–</button>
+<div style="min-width:34px;text-align:center;font:500 18px Mitr,sans-serif;color:#3A3254">{{ r.qty }}</div>
+<button onClick="{{ r.inc }}" style="width:42px;height:42px;border:none;border-radius:15px;font:500 20px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:5px 6px 13px rgba(90,68,180,.3),-3px -4px 9px #ffffff,inset 2px 2px 5px rgba(255,255,255,.3);cursor:pointer">+</button>
+</div>
+</div>
+<div style="font:500 12.5px Mitr,sans-serif;color:#5B5375;margin:14px 0 8px">สถานที่เก็บ</div>
+<div style="display:flex;align-items:center;gap:10px;border-radius:18px;padding:4px 6px 4px 15px;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff">
+<svg width="15" height="15" viewBox="0 0 16 16"><circle cx="6.8" cy="6.8" r="5" fill="none" stroke="#8B82A6" stroke-width="2"/><path d="M10.6 10.6 L14.5 14.5" stroke="#8B82A6" stroke-width="2" stroke-linecap="round"/></svg>
+<input value="{{ r.locQuery }}" onChange="{{ r.setLocQuery }}" placeholder="พิมพ์ชื่อที่เก็บ เช่น ตู้ / ครัว / KIT" style="flex:1;min-width:0;border:none;background:transparent;padding:12px 0;font:400 14px 'IBM Plex Sans Thai',sans-serif;color:#3A3254"/>
+<button onClick="{{ r.clearLoc }}" style="{{ r.clearLocStyle }}">ล้าง</button>
+</div>
+<sc-if value="{{ r.locPicked }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:9px;display:flex;align-items:center;gap:9px;border-radius:16px;padding:11px 13px;background:#EFE9FC;box-shadow:inset 3px 4px 9px rgba(120,95,175,.18),inset -2px -2px 7px #ffffff">
+<div style="font:500 10.5px 'IBM Plex Mono',monospace;color:#5B49C9;background:#FBF6FE;border-radius:9px;padding:5px 8px;box-shadow:2px 3px 7px rgba(120,95,175,.16)">{{ r.locCode }}</div>
+<div style="font:400 13px 'IBM Plex Sans Thai',sans-serif;color:#3A3254">{{ r.locName }}</div>
+</div>
+</sc-if>
+<div style="display:flex;flex-direction:column;gap:8px;margin-top:9px">
+<sc-for list="{{ r.locSuggest }}" as="l" hint-placeholder-count="0">
+<button onClick="{{ l.on }}" style="border:none;text-align:left;border-radius:16px;padding:12px 14px;background:#F8F3FD;box-shadow:4px 5px 12px rgba(120,95,175,.14),-3px -3px 8px #ffffff;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px">
+<span style="font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254">{{ l.name }}</span>
+<span style="font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC">{{ l.meta }}</span>
+</button>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+<button onClick="{{ addRow }}" style="width:100%;margin-top:14px;border:none;border-radius:22px;padding:15px;font:500 14px Mitr,sans-serif;color:#6A57D6;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.16),inset -3px -4px 10px #ffffff;cursor:pointer">+ เพิ่มรายการ</button>
+<button onClick="{{ addSave }}" style="width:100%;margin-top:12px;border:none;border-radius:24px;padding:17px;font:500 16px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.34),-5px -7px 14px rgba(255,255,255,.5),inset 2px 3px 6px rgba(255,255,255,.28);cursor:pointer">{{ addSaveLabel }}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ isMove }}" hint-placeholder-val="{{ false }}">
+<div style="animation:clayIn .3s ease both">
+<div style="font:500 13.5px Mitr,sans-serif;color:#5B5375;margin-bottom:9px">ผู้ย้าย</div>
+<div style="display:flex;gap:9px">
+<sc-for list="{{ ownerChips }}" as="o" hint-placeholder-count="2">
+<button onClick="{{ o.on }}" style="{{ o.style }}">{{ o.label }}</button>
+</sc-for>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px;margin-top:16px">
+<sc-for list="{{ moveRows }}" as="r" hint-placeholder-count="1">
+<div style="border-radius:28px;padding:17px;background:#FBF6FE;box-shadow:10px 13px 28px rgba(120,95,175,.18),-6px -8px 18px #ffffff,inset 2px 2px 4px #ffffff">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div style="font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC">{{ r.tag }}</div>
+<button onClick="{{ r.remove }}" style="{{ r.removeStyle }}">ลบ</button>
+</div>
+<input value="{{ r.query }}" onChange="{{ r.setQuery }}" placeholder="ค้นหาของที่มีอยู่ (พิมพ์ชื่อไม่ได้เอง)" style="width:100%;margin-top:11px;border:none;border-radius:18px;padding:14px 16px;font:400 14px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff"/>
+<div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+<sc-for list="{{ r.suggest }}" as="s" hint-placeholder-count="0">
+<button onClick="{{ s.on }}" style="border:none;text-align:left;border-radius:16px;padding:12px 14px;background:#F8F3FD;box-shadow:4px 5px 12px rgba(120,95,175,.14),-3px -3px 8px #ffffff;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px">
+<span style="font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254">{{ s.name }}</span>
+<span style="font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC">{{ s.meta }}</span>
+</button>
+</sc-for>
+</div>
+<sc-if value="{{ r.picked }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:12px;border-radius:20px;padding:14px;background:#EFE9FC;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff">
+<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+<div style="font:500 15px Mitr,sans-serif;color:#3A3254">{{ r.pickedName }}</div>
+<div style="font:500 11.5px Mitr,sans-serif;color:#5B49C9">{{ r.pickedMeta }}</div>
+</div>
+<div style="display:flex;align-items:center;gap:9px;margin-top:10px;flex-wrap:wrap">
+<div style="font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC;letter-spacing:.4px">จาก</div>
+<div style="{{ r.fromCodeStyle }}">{{ r.fromCode }}</div>
+<div style="font:400 12px 'IBM Plex Sans Thai',sans-serif;color:#5B5375">{{ r.fromName }}</div>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px">
+<div style="font:500 12.5px Mitr,sans-serif;color:#5B5375">จำนวนที่ย้าย</div>
+<div style="display:flex;align-items:center;gap:12px">
+<button onClick="{{ r.dec }}" style="width:42px;height:42px;border:none;border-radius:15px;font:500 20px Mitr,sans-serif;color:#6A57D6;background:#F8F3FD;box-shadow:4px 5px 11px rgba(120,95,175,.16),-3px -3px 8px #ffffff;cursor:pointer">–</button>
+<div style="min-width:34px;text-align:center;font:500 18px Mitr,sans-serif;color:#3A3254">{{ r.qty }}</div>
+<button onClick="{{ r.inc }}" style="width:42px;height:42px;border:none;border-radius:15px;font:500 20px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:5px 6px 13px rgba(90,68,180,.3),-3px -4px 9px #ffffff;cursor:pointer">+</button>
+</div>
+</div>
+</div>
+</sc-if>
+<div style="font:500 12.5px Mitr,sans-serif;color:#5B5375;margin:14px 0 8px">ย้ายไปที่</div>
+<div style="display:flex;align-items:center;gap:10px;border-radius:18px;padding:4px 6px 4px 15px;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff">
+<svg width="15" height="15" viewBox="0 0 16 16"><circle cx="6.8" cy="6.8" r="5" fill="none" stroke="#8B82A6" stroke-width="2"/><path d="M10.6 10.6 L14.5 14.5" stroke="#8B82A6" stroke-width="2" stroke-linecap="round"/></svg>
+<input value="{{ r.locQuery }}" onChange="{{ r.setLocQuery }}" placeholder="พิมพ์ที่เก็บใหม่ เช่น ตู้ / ห้องน้ำ / BAT" style="flex:1;min-width:0;border:none;background:transparent;padding:12px 0;font:400 14px 'IBM Plex Sans Thai',sans-serif;color:#3A3254"/>
+<button onClick="{{ r.clearLoc }}" style="{{ r.clearLocStyle }}">ล้าง</button>
+</div>
+<sc-if value="{{ r.locPicked }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:9px;display:flex;align-items:center;gap:9px;border-radius:16px;padding:11px 13px;background:#EFE9FC;box-shadow:inset 3px 4px 9px rgba(120,95,175,.18),inset -2px -2px 7px #ffffff">
+<div style="font:500 10.5px 'IBM Plex Mono',monospace;color:#5B49C9;background:#FBF6FE;border-radius:9px;padding:5px 8px;box-shadow:2px 3px 7px rgba(120,95,175,.16)">{{ r.locCode }}</div>
+<div style="font:400 13px 'IBM Plex Sans Thai',sans-serif;color:#3A3254">{{ r.locName }}</div>
+</div>
+</sc-if>
+<div style="display:flex;flex-direction:column;gap:8px;margin-top:9px">
+<sc-for list="{{ r.locSuggest }}" as="l" hint-placeholder-count="0">
+<button onClick="{{ l.on }}" style="border:none;text-align:left;border-radius:16px;padding:12px 14px;background:#F8F3FD;box-shadow:4px 5px 12px rgba(120,95,175,.14),-3px -3px 8px #ffffff;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px">
+<span style="font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254">{{ l.name }}</span>
+<span style="font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC">{{ l.meta }}</span>
+</button>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+<button onClick="{{ moveAddRow }}" style="width:100%;margin-top:14px;border:none;border-radius:22px;padding:15px;font:500 14px Mitr,sans-serif;color:#6A57D6;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.16),inset -3px -4px 10px #ffffff;cursor:pointer">+ เพิ่มรายการ</button>
+<button onClick="{{ moveSave }}" style="width:100%;margin-top:12px;border:none;border-radius:24px;padding:17px;font:500 16px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.34),-5px -7px 14px rgba(255,255,255,.5);cursor:pointer">{{ moveSaveLabel }}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ isUse }}" hint-placeholder-val="{{ false }}">
+<div style="animation:clayIn .3s ease both">
+<div style="display:flex;align-items:center;gap:10px;border-radius:22px;padding:5px 6px 5px 16px;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff">
+<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="6.8" cy="6.8" r="5" fill="none" stroke="#8B82A6" stroke-width="2"/><path d="M10.6 10.6 L14.5 14.5" stroke="#8B82A6" stroke-width="2" stroke-linecap="round"/></svg>
+<input value="{{ useQuery }}" onChange="{{ setUseQuery }}" placeholder="ค้นหาของที่จะใช้" style="flex:1;min-width:0;border:none;background:transparent;padding:13px 0;font:400 14.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254"/>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-top:15px">
+<div style="font:500 13px Mitr,sans-serif;color:#5B5375">ของทั้งหมดในบ้าน ({{ useCount }})</div>
+<div style="font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC">เลื่อนขึ้น–ลงเพื่อดูทั้งหมด</div>
+</div>
+<div data-scroll="1" style="display:flex;flex-direction:column;gap:10px;margin-top:10px;max-height:330px;overflow-y:auto;padding:2px 8px 2px 2px;border-radius:24px"><sc-for list="{{ useSuggest }}" as="s" hint-placeholder-count="3">
+<button onClick="{{ s.on }}" style="{{ s.style }}">
+<div style="flex:1;min-width:0;text-align:left">
+<div style="font:500 14.5px Mitr,sans-serif;color:#3A3254">{{ s.name }}</div>
+<div style="font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6">{{ s.loc }}</div>
+</div>
+<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+<div style="font:500 14px Mitr,sans-serif;color:#5B49C9">{{ s.left }}</div>
+<div style="{{ s.codeStyle }}">{{ s.code }}</div>
+</div>
+</button>
+</sc-for>
+</div>
+<sc-if value="{{ usePicked }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:16px;border-radius:28px;padding:20px;background:#FBF6FE;box-shadow:10px 13px 28px rgba(120,95,175,.18),-6px -8px 18px #ffffff,inset 2px 2px 4px #ffffff">
+<div style="font:500 18px Mitr,sans-serif;color:#3A3254">{{ useName }}</div>
+<div style="font:400 11.5px 'IBM Plex Mono',monospace;color:#6A57D6;margin-top:3px">{{ useMeta }}</div>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px">
+<div style="font:500 13px Mitr,sans-serif;color:#5B5375">จำนวนที่ใช้</div>
+<div style="display:flex;align-items:center;gap:12px">
+<button onClick="{{ useDec }}" style="width:46px;height:46px;border:none;border-radius:16px;font:500 21px Mitr,sans-serif;color:#6A57D6;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.18),inset -2px -2px 7px #ffffff;cursor:pointer">–</button>
+<div style="min-width:38px;text-align:center;font:500 20px Mitr,sans-serif;color:#3A3254">{{ useQty }}</div>
+<button onClick="{{ useInc }}" style="width:46px;height:46px;border:none;border-radius:16px;font:500 21px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:5px 6px 13px rgba(90,68,180,.3),-3px -4px 9px #ffffff;cursor:pointer">+</button>
+</div>
+</div>
+<div style="{{ useWarnStyle }}">{{ useWarn }}</div>
+<button onClick="{{ useSave }}" style="width:100%;margin-top:16px;border:none;border-radius:22px;padding:16px;font:500 15.5px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:8px 11px 22px rgba(90,68,180,.32),-4px -6px 12px rgba(255,255,255,.5);cursor:pointer">บันทึกการใช้</button>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isInv }}" hint-placeholder-val="{{ false }}">
+<div style="animation:clayIn .3s ease both">
+<div style="display:flex;align-items:center;gap:10px;border-radius:22px;padding:5px 6px 5px 16px;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff">
+<svg width="16" height="16" viewBox="0 0 16 16"><circle cx="6.8" cy="6.8" r="5" fill="none" stroke="#8B82A6" stroke-width="2"/><path d="M10.6 10.6 L14.5 14.5" stroke="#8B82A6" stroke-width="2" stroke-linecap="round"/></svg>
+<input value="{{ invQuery }}" onChange="{{ setInvQuery }}" placeholder="พิมพ์ ตู้ / ชื่อของ / รหัส เช่น KIT" style="flex:1;min-width:0;border:none;background:transparent;padding:13px 0;font:400 14.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254"/>
+</div>
+<div style="display:flex;gap:9px;margin-top:13px">
+<sc-for list="{{ invModes }}" as="m" hint-placeholder-count="3">
+<button onClick="{{ m.on }}" style="{{ m.style }}">{{ m.label }}</button>
+</sc-for>
+</div>
+
+<sc-if value="{{ invShowLocs }}" hint-placeholder-val="{{ true }}">
+<div style="font:500 13px Mitr,sans-serif;color:#5B5375;margin:20px 0 10px">สถานที่ ({{ invLocCount }})</div>
+<div style="display:flex;flex-direction:column;gap:11px">
+<sc-for list="{{ invLocs }}" as="l" hint-placeholder-count="4">
+<button onClick="{{ l.on }}" style="border:none;text-align:left;border-radius:22px;padding:15px 17px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff,inset 2px 2px 4px #ffffff;cursor:pointer;display:flex;align-items:center;gap:12px">
+<div style="flex:none;border-radius:13px;padding:9px 10px;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:4px 5px 12px rgba(90,68,180,.3),inset 2px 2px 5px rgba(255,255,255,.28);font:500 11px 'IBM Plex Mono',monospace;color:#ffffff;letter-spacing:.5px">{{ l.code }}</div>
+<div style="flex:1;min-width:0">
+<div style="font:500 14.5px Mitr,sans-serif;color:#3A3254">{{ l.name }}</div>
+<div style="font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6">{{ l.room }}</div>
+</div>
+<div style="font:500 13px Mitr,sans-serif;color:#5B49C9">{{ l.count }}</div>
+</button>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ invShowItems }}" hint-placeholder-val="{{ true }}">
+<div style="font:500 13px Mitr,sans-serif;color:#5B5375;margin:20px 0 10px">สิ่งของ ({{ invItemCount }})</div>
+<div style="display:flex;flex-direction:column;gap:11px">
+<sc-for list="{{ invItems }}" as="i" hint-placeholder-count="5">
+<div style="border-radius:22px;padding:15px 17px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff,inset 2px 2px 4px #ffffff">
+<div style="display:flex;align-items:center;gap:10px">
+<div style="flex:1;min-width:0">
+<div style="font:500 15px Mitr,sans-serif;color:#3A3254">{{ i.name }}</div>
+<div style="display:flex;align-items:center;gap:7px;margin-top:5px">
+<div style="{{ i.codeStyle }}">{{ i.code }}</div>
+<div style="font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6">{{ i.locLabel }}</div>
+</div>
+</div>
+<div style="{{ i.qtyStyle }}">{{ i.qtyLabel }}</div>
+</div>
+<div style="display:flex;gap:14px;margin-top:10px;flex-wrap:wrap">
+<div style="font:400 11px 'IBM Plex Mono',monospace;color:#9A90BC">อัปเดต {{ i.date }}</div>
+<div style="{{ i.expStyle }}">{{ i.expLabel }}</div>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isHist }}" hint-placeholder-val="{{ false }}">
+<div style="animation:clayIn .3s ease both">
+<div style="display:flex;gap:9px">
+<sc-for list="{{ histModes }}" as="m" hint-placeholder-count="3">
+<button onClick="{{ m.on }}" style="{{ m.style }}">{{ m.label }}</button>
+</sc-for>
+</div>
+<div style="margin-top:13px">
+<sc-if value="{{ histIsDate }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:9px;flex-wrap:wrap">
+<sc-for list="{{ histRanges }}" as="d" hint-placeholder-count="3">
+<button onClick="{{ d.on }}" style="{{ d.style }}">{{ d.label }}</button>
+</sc-for>
+</div>
+<div style="display:flex;gap:10px;margin-top:11px">
+<input value="{{ histFrom }}" onChange="{{ setHistFrom }}" type="date" style="flex:1;min-width:0;border:none;border-radius:16px;padding:13px 14px;font:400 13px 'IBM Plex Mono',monospace;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff"/>
+<input value="{{ histTo }}" onChange="{{ setHistTo }}" type="date" style="flex:1;min-width:0;border:none;border-radius:16px;padding:13px 14px;font:400 13px 'IBM Plex Mono',monospace;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff"/>
+</div>
+</sc-if>
+<sc-if value="{{ histIsLoc }}" hint-placeholder-val="{{ false }}">
+<select value="{{ histLoc }}" onChange="{{ setHistLoc }}" style="width:100%;border:none;appearance:none;border-radius:18px;padding:14px 16px;font:400 14px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff;cursor:pointer">
+<option value="">— ทุกสถานที่ —</option>
+<sc-for list="{{ locOptions }}" as="l" hint-placeholder-count="10">
+<option value="{{ l.code }}">{{ l.label }}</option>
+</sc-for>
+</select>
+</sc-if>
+<sc-if value="{{ histIsItem }}" hint-placeholder-val="{{ true }}">
+<input value="{{ histQuery }}" onChange="{{ setHistQuery }}" placeholder="พิมพ์ชื่อของ เช่น สบู่" style="width:100%;border:none;border-radius:18px;padding:14px 16px;font:400 14px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 10px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff"/>
+</sc-if>
+</div>
+<div style="font:400 11px 'IBM Plex Mono',monospace;color:#9A90BC;margin:18px 0 10px;letter-spacing:.4px">AUDIT TRAIL · ดูได้เท่านั้น แก้ไขไม่ได้ · {{ histCount }} รายการ</div>
+<div style="display:flex;flex-direction:column;gap:0">
+<sc-for list="{{ histList }}" as="h" hint-placeholder-count="5">
+<div style="display:flex;gap:13px">
+<div style="width:34px;flex:none;display:flex;flex-direction:column;align-items:center">
+<div style="{{ h.dot }}"></div>
+<div style="flex:1;width:2px;background:#DED5F0;border-radius:2px"></div>
+</div>
+<div style="flex:1;min-width:0;padding-bottom:14px">
+<div style="{{ h.cardStyle }}">
+<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
+<div style="{{ h.titleStyle }}">{{ h.title }}</div>
+<div style="font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC">{{ h.date }}</div>
+</div>
+<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px">
+<div style="{{ h.codeStyle }}">{{ h.codeLabel }}</div>
+<div style="font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6">{{ h.detail }}</div>
+</div>
+<div style="display:flex;align-items:center;gap:8px;margin-top:9px">
+<div style="{{ h.avatarStyle }}">{{ h.initial }}</div>
+<div style="{{ h.whoStyle }}">{{ h.who }}</div>
+</div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isShop }}" hint-placeholder-val="{{ false }}">
+<div style="animation:clayIn .3s ease both">
+<sc-for list="{{ shopGroups }}" as="g" hint-placeholder-count="2">
+<div style="margin-bottom:22px">
+<div style="display:flex;align-items:center;gap:9px;margin-bottom:11px">
+<div style="{{ g.dot }}"></div>
+<div style="font:500 14.5px Mitr,sans-serif;color:#3A3254">{{ g.title }}</div>
+<div style="font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6">{{ g.count }}</div>
+</div>
+<div style="display:flex;flex-direction:column;gap:11px">
+<sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
+<div style="{{ r.cardStyle }}">
+<button onClick="{{ r.on }}" style="{{ r.tickStyle }}">{{ r.tick }}</button>
+<div style="flex:1;min-width:0">
+<div style="{{ r.nameStyle }}">{{ r.name }}</div>
+<div style="font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6">{{ r.detail }}</div>
+</div>
+<div style="{{ r.codeStyle }}">{{ r.code }}</div>
+</div>
+</sc-for>
+<sc-if value="{{ g.empty }}" hint-placeholder-val="{{ false }}">
+<div style="border-radius:20px;padding:18px;text-align:center;font:400 12.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.14),inset -3px -3px 9px #ffffff">ไม่มีรายการ</div>
+</sc-if>
+</div>
+</div>
+</sc-for>
+<div style="border-radius:22px;padding:14px 16px;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.16),inset -3px -4px 10px #ffffff">
+<div style="font:400 12.5px/1.6 'IBM Plex Sans Thai',sans-serif;color:#5B5375">ติ๊กแล้วจะย้ายไปกลุ่ม “ซื้อแล้ว” แต่ยังไม่เพิ่ม stock จนกว่าจะบันทึก ADD</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ isSet }}" hint-placeholder-val="{{ false }}">
+<div style="animation:clayIn .3s ease both">
+<div style="font:500 13.5px Mitr,sans-serif;color:#5B5375;margin-bottom:10px">โทนสี clay</div>
+<div style="display:flex;gap:11px">
+<sc-for list="{{ tones }}" as="t" hint-placeholder-count="3">
+<button onClick="{{ t.on }}" style="{{ t.style }}">
+<div style="{{ t.swatch }}"></div>
+<div style="font:500 12.5px Mitr,sans-serif;color:#3A3254;margin-top:8px">{{ t.label }}</div>
+</button>
+</sc-for>
+</div>
+<div style="display:flex;gap:9px;margin-top:22px">
+<sc-for list="{{ setTabs }}" as="t" hint-placeholder-count="2">
+<button onClick="{{ t.on }}" style="{{ t.style }}">{{ t.label }}</button>
+</sc-for>
+</div>
+
+<sc-if value="{{ isSetPlaces }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px;gap:10px">
+<div style="font:500 13.5px Mitr,sans-serif;color:#5B5375">สถานที่จัดเก็บ ({{ placeCount }})</div>
+<button onClick="{{ placeAddOpen }}" style="border:none;cursor:pointer;border-radius:15px;padding:10px 14px;font:500 12.5px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:5px 7px 15px rgba(90,68,180,.32),-3px -4px 10px rgba(255,255,255,.6)">+ เพิ่มสถานที่</button>
+</div>
+<div style="display:flex;align-items:center;gap:10px;border-radius:20px;padding:4px 6px 4px 15px;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff">
+<svg width="15" height="15" viewBox="0 0 16 16"><circle cx="6.8" cy="6.8" r="5" fill="none" stroke="#8B82A6" stroke-width="2"/><path d="M10.6 10.6 L14.5 14.5" stroke="#8B82A6" stroke-width="2" stroke-linecap="round"/></svg>
+<input value="{{ placeQuery }}" onChange="{{ setPlaceQuery }}" placeholder="ค้นหาชื่อสถานที่ / ห้อง / รหัส" style="flex:1;min-width:0;border:none;background:transparent;padding:12px 0;font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254"/>
+</div>
+<div style="display:flex;flex-direction:column;gap:11px;margin-top:13px">
+<sc-for list="{{ placeRows }}" as="p" hint-placeholder-count="4">
+<div style="border-radius:24px;padding:15px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff,inset 2px 2px 4px #ffffff">
+<div style="display:flex;align-items:center;gap:10px">
+<input value="{{ p.code }}" onChange="{{ p.setCode }}" style="width:104px;flex:none;border:none;border-radius:13px;padding:10px 11px;text-align:center;font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.6px;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:4px 5px 12px rgba(90,68,180,.3),inset 2px 2px 5px rgba(255,255,255,.28)"/>
+<input value="{{ p.name }}" onChange="{{ p.setName }}" placeholder="ชื่อที่เก็บ" style="flex:1;min-width:0;border:none;border-radius:14px;padding:11px 13px;font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.16),inset -2px -2px 7px #ffffff"/>
+<button onClick="{{ p.del }}" style="width:30px;height:30px;flex:none;border:none;border-radius:10px;cursor:pointer;background:#FFE9E9;box-shadow:inset 2px 2px 6px rgba(201,82,79,.16);display:grid;place-items:center">
+<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C9524F" stroke-width="2.4" stroke-linecap="round"><path d="M6 6 L18 18 M18 6 L6 18"/></svg>
+</button>
+</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+<input value="{{ p.room }}" onChange="{{ p.setRoom }}" placeholder="ห้อง" style="flex:1;min-width:0;border:none;border-radius:14px;padding:11px 13px;font:400 13px 'IBM Plex Sans Thai',sans-serif;color:#5B5375;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.16),inset -2px -2px 7px #ffffff"/>
+<div style="font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC">{{ p.itemCount }}</div>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{ placeEmpty }}" hint-placeholder-val="{{ false }}">
+<div style="border-radius:20px;padding:22px;text-align:center;font:400 12.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.14),inset -3px -3px 9px #ffffff">ไม่พบสถานที่ที่ค้นหา</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ isSetItems }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 10px;gap:10px">
+<div style="font:500 13.5px Mitr,sans-serif;color:#5B5375">รายการของในบ้าน ({{ setCount }})</div>
+<button onClick="{{ setAddOpen }}" style="border:none;cursor:pointer;border-radius:15px;padding:10px 14px;font:500 12.5px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:5px 7px 15px rgba(90,68,180,.32),-3px -4px 10px rgba(255,255,255,.6);display:flex;align-items:center;gap:6px">+ เพิ่มของ</button>
+</div>
+<div style="display:flex;align-items:center;gap:10px;border-radius:20px;padding:4px 6px 4px 15px;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff">
+<svg width="15" height="15" viewBox="0 0 16 16"><circle cx="6.8" cy="6.8" r="5" fill="none" stroke="#8B82A6" stroke-width="2"/><path d="M10.6 10.6 L14.5 14.5" stroke="#8B82A6" stroke-width="2" stroke-linecap="round"/></svg>
+<input value="{{ setQuery }}" onChange="{{ setSetQuery }}" placeholder="ค้นหาชื่อของ หรือรหัสที่เก็บ" style="flex:1;min-width:0;border:none;background:transparent;padding:12px 0;font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254"/>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:13px">
+<sc-for list="{{ setRows }}" as="r" hint-placeholder-count="6">
+<div style="border-radius:22px;padding:13px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff,inset 2px 2px 4px #ffffff;display:flex;flex-direction:column;gap:9px">
+<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">
+<div style="font:500 13.5px/1.3 Mitr,sans-serif;color:#3A3254;min-width:0">{{ r.name }}</div>
+<button onClick="{{ r.del }}" style="width:26px;height:26px;flex:none;border:none;border-radius:9px;cursor:pointer;background:#FFE9E9;box-shadow:inset 2px 2px 6px rgba(201,82,79,.16);display:grid;place-items:center">
+<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#C9524F" stroke-width="2.4" stroke-linecap="round"><path d="M6 6 L18 18 M18 6 L6 18"/></svg>
+</button>
+</div>
+<div style="{{ r.codeStyle }}">{{ r.code }}</div>
+<div style="font:400 10.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6">มีอยู่ {{ r.qty }} · {{ r.kindLabel }}</div>
+<button onClick="{{ r.toggleTrack }}" style="{{ r.trackStyle }}">{{ r.trackLabel }}</button>
+<sc-for list="{{ r.fields }}" as="f" hint-placeholder-count="2">
+<div style="border-radius:15px;padding:9px 10px;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.16),inset -2px -2px 7px #ffffff">
+<div style="font:400 9.5px 'IBM Plex Mono',monospace;color:#8B82A6;letter-spacing:.4px">{{ f.label }}</div>
+<div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px">
+<button onClick="{{ f.dec }}" style="width:28px;height:28px;border:none;border-radius:10px;font:500 15px Mitr,sans-serif;color:#6A57D6;background:#FBF6FE;box-shadow:3px 3px 8px rgba(120,95,175,.16),-2px -2px 6px #ffffff;cursor:pointer">–</button>
+<div style="font:500 15px Mitr,sans-serif;color:#3A3254">{{ f.value }}</div>
+<button onClick="{{ f.inc }}" style="width:28px;height:28px;border:none;border-radius:10px;font:500 15px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:3px 4px 9px rgba(90,68,180,.28),-2px -2px 6px #ffffff;cursor:pointer">+</button>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-for>
+</div>
+<sc-if value="{{ setEmpty }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:12px;border-radius:20px;padding:22px;text-align:center;font:400 12.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.14),inset -3px -3px 9px #ffffff">ไม่พบรายการที่ค้นหา</div>
+</sc-if>
+</sc-if>
+<div style="margin-top:20px;border-radius:22px;padding:16px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff">
+<div style="font:500 14px Mitr,sans-serif;color:#3A3254">การแจ้งเตือน</div>
+<div style="font:400 12.5px/1.7 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:6px;white-space:pre-line">ของกิน: เตือน 3 วัน และ 1 วันก่อน EXP
+ของใช้: เตือน 7 วันก่อนหมด และวันที่หมดจริง
+สรุปรวมผ่าน LINE ทุกวัน 09:00</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+
+<div style="position:absolute;left:0;right:0;bottom:0;height:126px;padding:0 16px 30px;display:flex;align-items:flex-end;z-index:40;background:linear-gradient(180deg,rgba(240,232,250,0) 0%,rgba(239,231,248,.55) 40%,#EFE7F8 78%);pointer-events:none">
+<div style="width:100%;display:flex;align-items:center;gap:2px;padding:8px;border-radius:34px;pointer-events:auto;background:linear-gradient(150deg,rgba(255,255,255,.78) 0%,rgba(243,236,252,.5) 48%,rgba(224,213,244,.62) 100%);backdrop-filter:blur(20px) saturate(1.6);-webkit-backdrop-filter:blur(20px) saturate(1.6);box-shadow:0 16px 36px rgba(88,64,148,.26),0 2px 0 rgba(255,255,255,.9) inset,inset 3px 4px 10px rgba(255,255,255,.85),inset -4px -6px 14px rgba(120,95,175,.2)">
+<button onClick="{{ navHome.on }}" style="{{ navHome.style }}">
+<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+<div style="{{ navHome.labelStyle }}">หน้าแรก</div>
+</button>
+<button onClick="{{ navInv.on }}" style="{{ navInv.style }}">
+<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 15h4"/><path d="m14.817 10.995-.971-1.45 1.034-1.232a2 2 0 0 0-2.025-3.238l-1.82.364L9.91 3.885a2 2 0 0 0-3.625.748L6.141 6.55l-1.725.426a2 2 0 0 0-.19 3.756l.657.27"/><path d="m18.822 10.995 2.26-5.38a1 1 0 0 0-.557-1.318L16.954 2.9a1 1 0 0 0-1.281.533l-.924 2.122"/><path d="M4 12.006A1 1 0 0 1 4.994 11H19a1 1 0 0 1 1 1v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/></svg>
+<div style="{{ navInv.labelStyle }}">ของในบ้าน</div>
+</button>
+<button onClick="{{ goCam }}" style="width:66px;height:66px;flex:none;margin:0 2px;border:none;border-radius:24px;background:linear-gradient(150deg,#8B7BE8 0%,#6A57D6 45%,#5039BD 100%);box-shadow:0 14px 28px rgba(80,57,189,.45),-5px -7px 14px rgba(255,255,255,.65),inset 3px 4px 9px rgba(255,255,255,.42),inset -4px -7px 12px rgba(40,20,90,.3);cursor:pointer;display:grid;place-items:center;transform:translateY(-10px)">
+<svg width="26" height="22" viewBox="0 0 27 23"><rect x="1.5" y="4.5" width="24" height="17" rx="5" fill="none" stroke="#ffffff" stroke-width="2.2"/><circle cx="13.5" cy="13" r="4.6" fill="none" stroke="#ffffff" stroke-width="2.2"/><path d="M9 4.5 L10.8 1.5 L16.2 1.5 L18 4.5" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/></svg>
+</button>
+<button onClick="{{ navShop.on }}" style="{{ navShop.style }}">
+<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2.05 2.05 1.099-.028a1 1 0 0 1 1.008.815l2.69 14.347A1 1 0 0 0 7.83 18H18"/><path d="M4.563 5h16.435a1 1 0 0 1 .981 1.204l-1.026 6.226A2 2 0 0 1 18.962 14H6.25"/><circle cx="18" cy="20" r="2"/><circle cx="8" cy="20" r="2"/></svg>
+<div style="{{ navShop.labelStyle }}">รายการซื้อ</div>
+</button>
+<button onClick="{{ navHist.on }}" style="{{ navHist.style }}">
+<svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="m9 15 2 2 4-4"/></svg>
+<div style="{{ navHist.labelStyle }}">ประวัติ</div>
+</button>
+</div>
+</div>
+
+<div style="{{ toastStyle }}">{{ toast }}</div>
+
+<sc-if value="{{ viewerOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeViewer }}" style="position:absolute;inset:0;z-index:70;background:rgba(38,30,62,.86);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;flex-direction:column;padding:56px 18px 34px;animation:clayIn .22s ease both">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+<div style="min-width:0">
+<div style="font:500 15px Mitr,sans-serif;color:#ffffff">{{ viewerLabel }}</div>
+<div style="font:400 11px 'IBM Plex Mono',monospace;color:#C6B9E6;margin-top:2px">{{ viewerMeta }}</div>
+</div>
+<button onClick="{{ closeViewer }}" style="width:40px;height:40px;flex:none;border:none;border-radius:14px;cursor:pointer;background:rgba(255,255,255,.14);box-shadow:inset 2px 3px 8px rgba(255,255,255,.22);display:grid;place-items:center">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"><path d="M6 6 L18 18 M18 6 L6 18"/></svg>
+</button>
+</div>
+<div onClick="{{ stop }}" style="flex:1;margin-top:18px;border-radius:30px;background:repeating-linear-gradient(135deg,#E9E1F6 0 16px,#DED4EE 16px 32px);box-shadow:inset 6px 8px 20px rgba(90,68,150,.24),inset -5px -6px 16px rgba(255,255,255,.6);display:grid;place-items:center;text-align:center;padding:24px">
+<div>
+<div style="font:400 11px 'IBM Plex Mono',monospace;color:#7C7299;letter-spacing:1.2px">FULL SCREEN PHOTO</div>
+<div style="font:500 17px Mitr,sans-serif;color:#3A3254;margin-top:8px">{{ viewerLabel }}</div>
+</div>
+</div>
+<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-top:16px">
+<button onClick="{{ viewerPrev }}" style="{{ viewerNavStyle }}">‹ ก่อนหน้า</button>
+<button onClick="{{ viewerNext }}" style="{{ viewerNavStyle }}">ถัดไป ›</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeSheet }}" style="position:absolute;inset:0;background:rgba(58,50,84,.34);z-index:60;display:flex;align-items:flex-end">
+<div onClick="{{ stop }}" style="width:100%;border-radius:34px 34px 0 0;padding:22px 22px 40px;background:#F6F0FC;box-shadow:0 -12px 34px rgba(70,50,120,.28),inset 3px 5px 10px #ffffff;animation:clayUp .26s cubic-bezier(.3,1.2,.5,1) both">
+<div style="width:46px;height:5px;border-radius:99px;background:#DCD2ED;margin:0 auto 16px"></div>
+<div style="font:500 18px/1.4 Mitr,sans-serif;color:#3A3254">{{ sheetTitle }}</div>
+<div style="font:400 12.5px/1.6 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:5px">{{ sheetSub }}</div>
+<sc-if value="{{ sheetHasInput }}" hint-placeholder-val="{{ false }}">
+<input value="{{ sheetInputVal }}" onChange="{{ sheetInputSet }}" placeholder="{{ sheetInputPh }}" style="width:100%;margin-top:15px;border:none;border-radius:18px;padding:15px 16px;font:400 14.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff"/>
+</sc-if>
+<sc-if value="{{ sheetHasChips }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;gap:9px;margin-top:11px">
+<sc-for list="{{ sheetChips }}" as="c" hint-placeholder-count="2">
+<button onClick="{{ c.on }}" style="{{ c.style }}">{{ c.label }}</button>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ sheetHasPlace }}" hint-placeholder-val="{{ false }}">
+<div style="margin-top:14px">
+<div style="font:500 12.5px Mitr,sans-serif;color:#5B5375;margin-bottom:8px">Location หลัก</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap">
+<sc-for list="{{ placeRoomChips }}" as="c" hint-placeholder-count="4">
+<button onClick="{{ c.on }}" style="{{ c.style }}">{{ c.label }}</button>
+</sc-for>
+</div>
+<sc-if value="{{ placeRoomIsNew }}" hint-placeholder-val="{{ false }}">
+<input value="{{ placeRoomCustom }}" onChange="{{ setPlaceRoomCustom }}" placeholder="ชื่อ location หลักใหม่ เช่น ห้องทำงาน" style="width:100%;margin-top:10px;border:none;border-radius:16px;padding:13px 15px;font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff"/>
+</sc-if>
+<div style="font:500 12.5px Mitr,sans-serif;color:#5B5375;margin:16px 0 8px">รหัส location (แก้ได้ · ห้ามซ้ำ)</div>
+<div style="display:flex;align-items:center;gap:10px">
+<input value="{{ placeCodeVal }}" onChange="{{ setPlaceCode }}" style="width:132px;flex:none;border:none;border-radius:14px;padding:13px 12px;text-align:center;font:500 13px 'IBM Plex Mono',monospace;letter-spacing:.7px;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:4px 6px 13px rgba(90,68,180,.3),inset 2px 2px 5px rgba(255,255,255,.28)"/>
+<div style="flex:1;font:400 11.5px/1.5 'IBM Plex Sans Thai',sans-serif;color:#8B82A6">{{ placeCodeHint }}</div>
+</div>
+</div>
+</sc-if>
+<div style="display:flex;flex-direction:column;gap:11px;margin-top:18px">
+<sc-for list="{{ sheetActions }}" as="a" hint-placeholder-count="2">
+<button onClick="{{ a.on }}" style="{{ a.style }}">{{ a.label }}</button>
+</sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+</div>
+</div>
+</x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;tone&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;lilac&quot;,&quot;peach&quot;,&quot;mint&quot;],&quot;default&quot;:&quot;lilac&quot;,&quot;tsType&quot;:&quot;'lilac'|'peach'|'mint'&quot;,&quot;section&quot;:&quot;ธีม&quot;},&quot;showAlerts&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;หน้าแรก&quot;}}">
+const TODAY = new Date('2026-09-06T09:00:00');
+const LOCS = [
+  ['GAR-01','ตู้เก็บของ','โรงรถ'],['GAR-02','ชั้นวาง','โรงรถ'],
+  ['MAS-01','ตู้เสื้อผ้า','ห้องนอนใหญ่'],['MAS-02','โต๊ะข้างเตียง','ห้องนอนใหญ่'],
+  ['SML-01','ตู้เก็บของ','ห้องนอนเล็ก'],['LIV-01','ตู้ทีวี','ห้องนั่งเล่น'],
+  ['KIT-01','ตู้ใต้ซิงค์','ห้องครัว'],['KIT-02','ตู้แขวน','ห้องครัว'],
+  ['KIT-03','ตู้กับข้าว','ห้องครัว'],['BAT-01','ตู้เก็บของ','ห้องน้ำ']
+].map(function(l){return {code:l[0],name:l[1],room:l[2],label:l[0]+' · '+l[2]+' – '+l[1]};});
+
+const ITEMS = [
+  {id:1,name:'หูฟัง nubwo',kind:'supply',qty:1,loc:'LIV-01',owner:'เก่ง',date:'2026-08-21',min:1,target:1,noStock:true},
+  {id:2,name:'สบู่',kind:'supply',qty:2,loc:'BAT-01',owner:'omo',date:'2026-09-01',min:3,target:6},
+  {id:3,name:'ทิชชู่',kind:'supply',qty:1,loc:'BAT-01',owner:'omo',date:'2026-08-30',min:2,target:6},
+  {id:4,name:'สาย usb type-c',kind:'supply',qty:3,loc:'MAS-02',owner:'เก่ง',date:'2026-08-12',min:1,target:3,noStock:true},
+  {id:5,name:'ยาลดไข้',kind:'food',qty:8,loc:'MAS-02',owner:'omo',date:'2026-07-19',exp:'2026-09-09',min:4,target:10},
+  {id:6,name:'ยาแก้ท้องเสีย',kind:'food',qty:0,loc:'MAS-02',owner:'omo',date:'2026-09-04',exp:'2027-01-10',min:2,target:6},
+  {id:7,name:'powerbank',kind:'supply',qty:2,loc:'GAR-01',owner:'เก่ง',date:'2026-06-30',min:1,target:2,noStock:true},
+  {id:8,name:'passport',kind:'supply',qty:2,loc:'MAS-01',owner:'เก่ง',date:'2026-05-02',min:2,target:2,noStock:true},
+  {id:9,name:'กระเป๋าตัง',kind:'supply',qty:1,loc:'MAS-01',owner:'omo',date:'2026-09-05',min:1,target:1,noStock:true},
+  {id:10,name:'น้ำปลา',kind:'food',qty:1,loc:'KIT-03',owner:'เก่ง',date:'2026-08-28',exp:'2026-09-07',min:1,target:2},
+  {id:11,name:'น้ำยาซักผ้า',kind:'supply',qty:1,loc:'BAT-01',owner:'omo',date:'2026-08-19',min:1,target:2}
+];
+
+const PENDING = [
+  {id:'p1',name:'น้ำปลา',src:'LINE OFFICIAL',shots:['ฉลากขวด','ชั้นในตู้'],evt:'ADD',ready:false,miss:'ยังไม่ได้ระบุจำนวน / สถานที่'},
+  {id:'p2',name:'สบู่',src:'IN-APP',shots:['แพ็ค 3 ก้อน'],evt:'ADD',ready:false,miss:'ยังไม่ได้ระบุจำนวน'},
+  {id:'p3',name:'น้ำยาซักผ้า',src:'IN-APP',shots:['ถุงเติม','ตู้ห้องน้ำ','รหัสตู้'],evt:'MOVE',ready:true,miss:'ข้อมูลพร้อมบันทึก'}
+];
+
+const HIST = [
+  {evt:'USE',name:'ทิชชู่',qty:1,to:'BAT-01',who:'omo',date:'2026-09-05 20:14'},
+  {evt:'ADD',name:'กระเป๋าตัง',qty:1,to:'MAS-01',who:'omo',date:'2026-09-05 18:02'},
+  {evt:'ADJUST',name:'ยาแก้ท้องเสีย',qty:0,to:'MAS-02',who:'omo',date:'2026-09-04 09:30'},
+  {evt:'MOVE',name:'powerbank',qty:1,from:'LIV-01',to:'GAR-01',who:'เก่ง',date:'2026-09-02 11:47'},
+  {evt:'ADD',name:'สบู่',qty:2,to:'BAT-01',who:'omo',date:'2026-09-01 19:20'},
+  {evt:'USE',name:'น้ำปลา',qty:1,to:'KIT-03',who:'เก่ง',date:'2026-08-30 17:05'}
+];
+
+const TONE = {
+  lilac:{f:'none',label:'ลาเวนเดอร์',sw:'linear-gradient(145deg,#8B7BE8,#5B49C9)'},
+  peach:{f:'hue-rotate(-42deg) saturate(1.05)',label:'พีชอบอุ่น',sw:'linear-gradient(145deg,#E8917B,#C95649)'},
+  mint:{f:'hue-rotate(112deg) saturate(.88)',label:'มินต์เย็น',sw:'linear-gradient(145deg,#4FC0A8,#2E8F86)'}
+};
+
+class Component extends DCLogic {
+  state = {
+    tone: null, screen: 'home', locs: LOCS.slice(), setTab: 'items', placeQuery: '', items: ITEMS.map(function(i){return Object.assign({},i);}),
+    pending: PENDING.map(function(p){return Object.assign({},p);}),
+    hist: HIST.slice(), bought: [], toast: '', sheet: null,
+    camShots: [], camEvt: 'ADD', viewer: null,
+    owner: 'เก่ง',
+    addRows: [{name:'',kind:'supply',qty:1,loc:'',locQuery:'',expMode:'days',expVal:''}],
+    moveRows: [{query:'',itemId:null,qty:1,to:'',locQuery:''}],
+    useId: null, useQty: 1, useQuery: '',
+    invQuery: '', invMode: 'all', invLoc: null,
+    setQuery: '', sheetText: '', newKind: 'supply',
+    placeRoom: '', placeRoomCustom: '', placeCode: '',
+    histMode: 'item', histQuery: '', histLoc: '', histFrom: '2026-08-30', histTo: '2026-09-06'
+  };
+
+  tone(){ return TONE[this.state.tone || this.props.tone || 'lilac'] || TONE.lilac; }
+  loc(code){ var L=this.state.locs; for (var i=0;i<L.length;i++) if (L[i].code===code) return L[i]; return null; }
+  locLabel(code){ var l=this.loc(code); return l ? l.room+' – '+l.name : '—'; }
+  item(id){ return this.state.items.filter(function(i){return i.id===id;})[0]; }
+  days(exp){ if(!exp) return null; return Math.round((new Date(exp+'T09:00:00')-TODAY)/86400000); }
+  flash(t){ var self=this; this.setState({toast:t}); clearTimeout(this._t); this._t=setTimeout(function(){self.setState({toast:''});},2600); }
+  nav(s){ var self=this; return function(){ self.setState({screen:s, sheet:null}); }; }
+  log(e){ var h=this.state.hist.slice(); h.unshift(Object.assign({date:'2026-09-06 09:12'},e)); return h; }
+
+  locSug(q, code, pick){
+    var qq=(q||'').trim().toLowerCase();
+    if(!qq) return [];
+    var hit=this.state.locs.filter(function(l){ return (l.name+l.room+l.code).toLowerCase().indexOf(qq)>=0; });
+    if(hit.length===1 && hit[0].code===code) return [];
+    return hit.slice(0,5).map(function(l){
+      return {name:l.name+' ('+l.room+')',meta:l.code,on:function(){ pick(l); }};
+    });
+  }
+  chip(sel, wide){
+    return 'border:none;cursor:pointer;flex:'+(wide?'1':'none')+';border-radius:16px;padding:11px 15px;'
+      + "font:500 13px Mitr,sans-serif;white-space:nowrap;"
+      + (sel
+        ? 'color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:5px 7px 15px rgba(90,68,180,.34),-3px -4px 10px rgba(255,255,255,.6),inset 2px 2px 5px rgba(255,255,255,.28)'
+        : 'color:#5B5375;background:#F5EFFC;box-shadow:5px 6px 14px rgba(120,95,175,.16),-4px -5px 12px #ffffff,inset 1px 1px 3px #ffffff');
+  }
+  autoCode(room){
+    var L=this.state.locs, same=L.filter(function(l){return l.room===room;});
+    var prefix;
+    if(same.length) prefix=same[0].code.split('-')[0];
+    else {
+      var map={'ห้องนอน':'BED','ห้องนอนใหญ่':'MAS','ห้องนอนเล็ก':'SML','โรงรถ':'GAR','ห้องครัว':'KIT','ห้องน้ำ':'BAT','ห้องนั่งเล่น':'LIV','ห้องทำงาน':'OFF'};
+      prefix=map[room];
+      if(!prefix){
+        var en=(room||'').replace(/[^A-Za-z]/g,'').toUpperCase();
+        prefix= en.length>=3 ? en.slice(0,3) : 'LOC';
+        var i=1;
+        while(L.filter(function(l){return l.code.split('-')[0]===prefix;}).length && prefix!=='LOC'){ prefix='LOC'; }
+        if(prefix==='LOC'){ while(L.filter(function(l){return l.code.split('-')[0]==='L'+(i<10?'0':'')+i;}).length) i++; prefix='L'+(i<10?'0':'')+i; }
+      }
+    }
+    var n=1, code;
+    do { code=prefix+'-'+(n<10?'0':'')+n; n++; } while(L.filter(function(l){return l.code===code;}).length);
+    return code;
+  }
+  codeBadge(strong){
+    return strong
+      ? 'flex:none;border-radius:12px;padding:7px 10px;font:500 11px "IBM Plex Mono",monospace;letter-spacing:.6px;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:4px 5px 12px rgba(90,68,180,.32),inset 2px 2px 5px rgba(255,255,255,.28)'
+      : 'flex:none;border-radius:11px;padding:6px 9px;font:500 10.5px "IBM Plex Mono",monospace;letter-spacing:.6px;color:#5B49C9;background:#EFE9FC;box-shadow:inset 2px 3px 7px rgba(120,95,175,.2),2px 3px 8px rgba(120,95,175,.14)';
+  }
+  ghost(){ return 'border:none;cursor:pointer;border-radius:13px;padding:7px 11px;font:500 11px Mitr,sans-serif;color:#9A90BC;background:#F1ECFA;box-shadow:inset 2px 3px 7px rgba(120,95,175,.16),inset -2px -2px 6px #ffffff'; }
+  pill(bg, fg){ return 'flex:none;border-radius:13px;padding:7px 10px;font:500 11px Mitr,sans-serif;color:'+fg+';background:'+bg+';box-shadow:inset 2px 3px 7px rgba(120,95,175,.14),3px 4px 9px rgba(120,95,175,.14)'; }
+  shot(label, w){ return 'position:relative;border:none;cursor:zoom-in;flex:none;width:'+w+'px;height:'+(w*0.78)+'px;border-radius:18px;background:repeating-linear-gradient(135deg,#E9E1F6 0 8px,#E0D7F1 8px 16px);box-shadow:inset 3px 4px 9px rgba(90,68,150,.18),inset -2px -3px 8px rgba(255,255,255,.7);display:grid;place-items:center;text-align:center;padding:4px'; }
+
+  head(){
+    var s = this.state.screen, n = this.state.pending.length;
+    var map = {
+      home:['สวัสดี '+this.state.owner,'ภาพรวมของในบ้าน · 6 ก.ย. 2569'],
+      pending:['รายการรอบันทึก', n+' รายการ · เลือกรูปเพื่อบันทึกต่อ'],
+      cam:['ถ่ายรูปของ','ขั้นที่ 1 ของทุกการบันทึก'],
+      add:['เก็บเข้าบ้าน','ADD · บันทึกได้หลายรายการต่อครั้ง'],
+      move:['ย้ายของ','MOVE · เลือกจากของที่มีอยู่'],
+      use:['ใช้ของ','USE · ตัดยอดออกจากสต็อก'],
+      inv:['ของในบ้าน','ค้นหาตามสถานที่หรือชื่อของ'],
+      hist:['ประวัติ','Audit trail ย้อนหลัง'],
+      shop:['รายการซื้อ','หมดแล้ว / ใกล้หมด'],
+      set:['ตั้งค่า','โทนสี · stock · การแจ้งเตือน']
+    };
+    return map[s] || map.home;
+  }
+
+  // ── flows ───────────────────────────────────────────
+  startAddFrom(p){
+    var self=this;
+    return function(){
+      self.setState({screen:'add', addRows:[{name:p.name,kind:'supply',qty:1,loc:'',locQuery:'',expMode:'days',expVal:''}],
+        pending:self.state.pending.filter(function(x){return x.id!==p.id;})});
+      self.flash('ดึง “'+p.name+'” จากรายการรอบันทึกแล้ว');
+    };
+  }
+  startMoveFrom(p){
+    var self=this;
+    return function(){
+      var match=self.state.items.filter(function(i){return i.name===p.name;})[0];
+      self.setState({screen:'move', moveRows:[{query:p.name,itemId:match?match.id:null,qty:1,to:'',locQuery:''}],
+        pending:self.state.pending.filter(function(x){return x.id!==p.id;})});
+    };
+  }
+  startUseFrom(p){
+    var self=this;
+    return function(){
+      var match=self.state.items.filter(function(i){return i.name===p.name;})[0];
+      self.setState({screen:'use', useQuery:p.name, useId:match?match.id:null, useQty:1,
+        pending:self.state.pending.filter(function(x){return x.id!==p.id;})});
+    };
+  }
+
+  addSave(){
+    var self=this;
+    return function(){
+      var rows=self.state.addRows.filter(function(r){return r.name.trim() && r.loc;});
+      if(!rows.length){ self.flash('กรอกชื่อของและเลือกสถานที่ก่อนบันทึก'); return; }
+      var items=self.state.items.slice(), hist=self.state.hist.slice(), added=0;
+      rows.forEach(function(r){
+        var exp=null;
+        if(r.kind==='food' && r.expVal){
+          if(r.expMode==='days'){ var d=new Date(TODAY.getTime()+ (parseInt(r.expVal,10)||0)*86400000); exp=d.toISOString().slice(0,10); }
+          else exp=r.expVal;
+        }
+        var ex=items.filter(function(i){return i.name===r.name.trim() && i.loc===r.loc;})[0];
+        if(ex){ ex.qty+=r.qty; ex.date='2026-09-06'; if(exp) ex.exp=exp; }
+        else items.push({id:Date.now()+added,name:r.name.trim(),kind:r.kind,qty:r.qty,loc:r.loc,owner:self.state.owner,date:'2026-09-06',exp:exp,min:1,target:Math.max(2,r.qty)});
+        hist.unshift({evt:'ADD',name:r.name.trim(),qty:r.qty,to:r.loc,who:self.state.owner,date:'2026-09-06 09:12'});
+        added++;
+      });
+      self.setState({items:items,hist:hist,screen:'inv',invMode:'item',invQuery:'',
+        addRows:[{name:'',kind:'supply',qty:1,loc:'',locQuery:'',expMode:'days',expVal:''}]});
+      self.flash('บันทึกเก็บของ '+added+' รายการ โดย '+self.state.owner);
+    };
+  }
+  moveSave(){
+    var self=this;
+    return function(){
+      var rows=self.state.moveRows.filter(function(r){return r.itemId && r.to;});
+      if(!rows.length){ self.flash('เลือกของและสถานที่ใหม่ก่อนบันทึก'); return; }
+      var items=self.state.items.slice(), hist=self.state.hist.slice();
+      rows.forEach(function(r){
+        var src=items.filter(function(i){return i.id===r.itemId;})[0];
+        if(!src) return;
+        var qty=Math.min(r.qty,src.qty), from=src.loc;
+        src.qty-=qty; src.date='2026-09-06';
+        var dst=items.filter(function(i){return i.name===src.name && i.loc===r.to;})[0];
+        if(dst) dst.qty+=qty;
+        else items.push({id:Date.now()+Math.random(),name:src.name,kind:src.kind,qty:qty,loc:r.to,owner:self.state.owner,date:'2026-09-06',exp:src.exp,min:src.min,target:src.target});
+        hist.unshift({evt:'MOVE',name:src.name,qty:qty,from:from,to:r.to,who:self.state.owner,date:'2026-09-06 09:12'});
+      });
+      self.setState({items:items.filter(function(i){return i.qty>0 || i.min>0;}),hist:hist,screen:'inv',invMode:'loc',invLoc:rows[0].to,
+        moveRows:[{query:'',itemId:null,qty:1,to:'',locQuery:''}]});
+      self.flash('ย้าย '+rows.length+' รายการ โดย '+self.state.owner);
+    };
+  }
+  useSave(){
+    var self=this;
+    return function(){
+      var it=self.item(self.state.useId);
+      if(!it){ self.flash('เลือกของที่จะใช้ก่อน'); return; }
+      var q=Math.min(self.state.useQty,it.qty);
+      var items=self.state.items.map(function(i){ return i.id===it.id ? Object.assign({},i,{qty:i.qty-q,date:'2026-09-06'}) : i; });
+      var hist=self.state.hist.slice();
+      hist.unshift({evt:'USE',name:it.name,qty:q,to:it.loc,who:self.state.owner,date:'2026-09-06 09:12'});
+      var left=it.qty-q;
+      self.setState({items:items,hist:hist,useId:null,useQuery:'',useQty:1});
+      if(left<=0) self.flash('⚠ ' + it.name + ' หมดแล้ว — เพิ่มเข้ารายการซื้ออัตโนมัติ');
+      else self.flash('ใช้ '+it.name+' '+q+' หน่วย · เหลือ '+left);
+    };
+  }
+
+  // ── derived ─────────────────────────────────────────
+  shopRows(){
+    var self=this, agg={};
+    this.state.items.forEach(function(i){
+      if(i.noStock) return;
+      var k=i.name;
+      if(!agg[k]) agg[k]={name:k,qty:0,min:i.min,code:i.loc,kind:i.kind};
+      agg[k].qty+=i.qty; agg[k].min=Math.max(agg[k].min,i.min);
+    });
+    var out=[], keys=Object.keys(agg);
+    keys.forEach(function(k){
+      var a=agg[k];
+      if(a.qty<=0) a.group='out';
+      else if(a.qty<=a.min) a.group='low';
+      else return;
+      if(self.state.bought.indexOf(k)>=0) a.group='bought';
+      out.push(a);
+    });
+    return out;
+  }
+
+  renderVals(){
+    var self=this, S=this.state, h=this.head(), tone=this.tone();
+    var items=S.items, screen=S.screen;
+    var expiring=items.filter(function(i){ var d=self.days(i.exp); return i.qty>0 && d!==null && d<=3; });
+    var out=items.filter(function(i){return !i.noStock && i.qty<=0;});
+    var low=items.filter(function(i){return !i.noStock && i.qty>0 && i.qty<=i.min;});
+    var shop=this.shopRows();
+    var totalQty=items.reduce(function(a,i){return a+i.qty;},0);
+    var tracked=items.filter(function(i){return !i.noStock;});
+    var ready=tracked.length ? Math.round(tracked.filter(function(i){return i.qty>i.min;}).length/tracked.length*100) : 100;
+
+    var alerts=[];
+    expiring.forEach(function(i){
+      var d=self.days(i.exp);
+      alerts.push({tag:d<=1?'EXP 1 วัน':'EXP '+d+' วัน',pill:self.pill('#FFE6E6','#C9524F'),name:i.name,
+        detail:'หมดอายุ '+i.exp+' · '+self.locLabel(i.loc)+' · เหลือ '+i.qty,cta:'ใช้เลย',
+        on:function(){ self.setState({screen:'use',useQuery:i.name,useId:i.id,useQty:1}); }});
+    });
+    out.forEach(function(i){
+      alerts.push({tag:'หมดแล้ว',pill:self.pill('#FFE9DC','#C4692F'),name:i.name,
+        detail:'ที่ '+self.locLabel(i.loc)+' · ต้องมีขั้นต่ำ '+i.min,cta:'ใส่ลิสต์',on:self.nav('shop')});
+    });
+    low.forEach(function(i){
+      alerts.push({tag:'ใกล้หมด',pill:self.pill('#FFF4D9','#A9741B'),name:i.name,
+        detail:'เหลือ '+i.qty+' · ขั้นต่ำ '+i.min+' · target '+i.target,cta:'ใส่ลิสต์',on:self.nav('shop')});
+    });
+
+    // pending cards
+    var pendingList=S.pending.map(function(p){
+      var acts=[
+        {label:'เก็บของ',on:self.startAddFrom(p),style:self.chip(p.evt==='ADD',true)},
+        {label:'ย้ายของ',on:self.startMoveFrom(p),style:self.chip(p.evt==='MOVE',true)},
+        {label:'ใช้ของ',on:self.startUseFrom(p),style:self.chip(p.evt==='USE',true)}
+      ];
+      return {name:p.name,src:p.src,
+        shots:p.shots.map(function(s,si){return {label:s,style:self.shot(s, p.shots.length>1?126:170),
+          on:function(){ self.setState({viewer:{shots:p.shots,idx:si,src:p.name+' · '+p.src}}); }};}),
+        status:p.miss,
+        statusStyle:'margin-top:5px;font:400 12px "IBM Plex Sans Thai",sans-serif;color:'+(p.ready?'#2E8F6B':'#C4692F'),
+        actions:acts};
+    });
+
+    // camera
+    var camEvents=[['ADD','เก็บของ'],['MOVE','ย้ายของ'],['USE','ของที่ถูกใช้']].map(function(e){
+      return {label:e[1],style:self.chip(S.camEvt===e[0],true),on:function(){self.setState({camEvt:e[0]});}};
+    });
+
+    // add rows
+    var addRows=S.addRows.map(function(r,idx){
+      var set=function(patch){ var rows=S.addRows.map(function(x,i){return i===idx?Object.assign({},x,patch):x;}); self.setState({addRows:rows}); };
+      return {
+        tag:'รายการที่ '+(idx+1),
+        removeStyle: S.addRows.length>1 ? self.ghost() : 'display:none',
+        remove:function(){ self.setState({addRows:S.addRows.filter(function(x,i){return i!==idx;})}); },
+        name:r.name, setName:function(e){ set({name:e.target.value}); },
+        mic:function(){ set({name:r.name||'สเปรย์กระจก'}); self.flash('🎙 Voice-to-Text: “สเปรย์กระจก”'); },
+        kinds:[['supply','ของใช้'],['food','ของกิน']].map(function(k){
+          return {label:k[1],style:self.chip(r.kind===k[0],true),on:function(){ set({kind:k[0],expVal:''}); }};
+        }),
+        isFood:r.kind==='food',
+        expModes:[['days','อายุกี่วัน'],['date','ระบุวันที่']].map(function(m){
+          return {label:m[1],style:self.chip(r.expMode===m[0],true),on:function(){ set({expMode:m[0],expVal:''}); }};
+        }),
+        expVal:r.expVal, setExp:function(e){ set({expVal:e.target.value}); },
+        expInputType:r.expMode==='days'?'number':'date',
+        expPlaceholder:r.expMode==='days'?'เช่น 7':'',
+        expHint:r.expMode==='days'?'วันนับจากวันนี้':'วัน EXP จริง',
+        qty:r.qty, inc:function(){ set({qty:r.qty+1}); }, dec:function(){ set({qty:Math.max(1,r.qty-1)}); },
+        locQuery:r.locQuery||'',
+        setLocQuery:function(e){ set({locQuery:e.target.value,loc:''}); },
+        clearLoc:function(){ set({locQuery:'',loc:''}); },
+        clearLocStyle:(r.locQuery||r.loc)?self.ghost():'display:none',
+        locPicked:!!r.loc, locCode:r.loc,
+        locName:r.loc?self.locLabel(r.loc):'',
+        locSuggest:self.locSug(r.locQuery, r.loc, function(l){ set({loc:l.code,locQuery:l.name}); })
+      };
+    });
+
+    // move rows
+    var moveRows=S.moveRows.map(function(r,idx){
+      var set=function(patch){ var rows=S.moveRows.map(function(x,i){return i===idx?Object.assign({},x,patch):x;}); self.setState({moveRows:rows}); };
+      var picked=r.itemId?self.item(r.itemId):null;
+      var q=r.query.trim();
+      var sug=(!picked && q) ? items.filter(function(i){return i.qty>0 && i.name.indexOf(q)>=0;}).slice(0,4) : [];
+      return {
+        tag:'ย้ายรายการที่ '+(idx+1),
+        removeStyle:S.moveRows.length>1?self.ghost():'display:none',
+        remove:function(){ self.setState({moveRows:S.moveRows.filter(function(x,i){return i!==idx;})}); },
+        query:r.query, setQuery:function(e){ set({query:e.target.value,itemId:null}); },
+        suggest:sug.map(function(i){ return {name:i.name,meta:i.loc+' · เหลือ '+i.qty,on:function(){ set({itemId:i.id,query:i.name,qty:1}); }}; }),
+        picked:!!picked,
+        pickedName:picked?picked.name:'',
+        pickedMeta:picked?('เหลือ '+picked.qty):'',
+        fromCode:picked?picked.loc:'', fromName:picked?self.locLabel(picked.loc):'',
+        fromCodeStyle:self.codeBadge(true),
+        qty:r.qty,
+        inc:function(){ set({qty:Math.min(picked?picked.qty:99,r.qty+1)}); },
+        dec:function(){ set({qty:Math.max(1,r.qty-1)}); },
+        locQuery:r.locQuery||'',
+        setLocQuery:function(e){ set({locQuery:e.target.value,to:''}); },
+        clearLoc:function(){ set({locQuery:'',to:''}); },
+        clearLocStyle:(r.locQuery||r.to)?self.ghost():'display:none',
+        locPicked:!!r.to, locCode:r.to,
+        locName:r.to?self.locLabel(r.to):'',
+        locSuggest:self.locSug(r.locQuery, r.to, function(l){ set({to:l.code,locQuery:l.name}); })
+      };
+    });
+
+    // use
+    var uq=S.useQuery.trim();
+    var usePick=S.useId?self.item(S.useId):null;
+    var useSuggest=items.filter(function(i){return !uq || i.name.indexOf(uq)>=0;}).map(function(i){
+      return {name:i.name,loc:self.locLabel(i.loc),code:i.loc,left:'เหลือ '+i.qty,codeStyle:self.codeBadge(false),
+        style:'border:none;cursor:pointer;display:flex;align-items:center;gap:12px;border-radius:22px;padding:14px 16px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff'+(i.qty<=0?';opacity:.55':''),
+        on:function(){ self.setState({useId:i.id,useQty:1,useQuery:i.name}); }};
+    });
+    var useWarn='', useWarnStyle='display:none';
+    if(usePick){
+      if(usePick.qty-S.useQty<=0){ useWarn='ใช้แล้วจะเหลือ 0 — ระบบจะเตือนของหมดและใส่รายการซื้อ'; useWarnStyle='margin-top:12px;border-radius:16px;padding:11px 13px;font:400 12px/1.5 "IBM Plex Sans Thai",sans-serif;color:#C4692F;background:#FFF1E6;box-shadow:inset 3px 4px 9px rgba(200,120,70,.14)'; }
+      else if(usePick.qty-S.useQty<=usePick.min){ useWarn='ใช้แล้วจะต่ำกว่าขั้นต่ำ ('+usePick.min+')'; useWarnStyle='margin-top:12px;border-radius:16px;padding:11px 13px;font:400 12px/1.5 "IBM Plex Sans Thai",sans-serif;color:#A9741B;background:#FFF7E3;box-shadow:inset 3px 4px 9px rgba(180,140,40,.14)'; }
+    }
+
+    // inventory
+    var iq=S.invQuery.trim().toLowerCase();
+    var locMatch=S.locs.filter(function(l){ return !iq || (l.name+l.room+l.code).toLowerCase().indexOf(iq)>=0; });
+    var itemMatch=items.filter(function(i){ return !iq || (i.name+i.loc).toLowerCase().indexOf(iq)>=0; });
+    if(S.invLoc) itemMatch=items.filter(function(i){return i.loc===S.invLoc;});
+    var showLocs=(S.invMode==='all'||S.invMode==='loc') && !S.invLoc;
+    var showItems=(S.invMode==='all'||S.invMode==='item'||!!S.invLoc);
+    var invItems=itemMatch.map(function(i){
+      var d=self.days(i.exp);
+      return {name:i.name,locLabel:self.locLabel(i.loc),code:i.loc,date:i.date,codeStyle:self.codeBadge(true),
+        qtyLabel:i.qty<=0?'หมด':'เหลือ '+i.qty,
+        qtyStyle:self.pill(i.qty<=0?'#FFE6E6':((!i.noStock&&i.qty<=i.min)?'#FFF4D9':'#E9F7EF'), i.qty<=0?'#C9524F':((!i.noStock&&i.qty<=i.min)?'#A9741B':'#2E8F6B')),
+        expLabel:i.exp?('EXP '+i.exp+(d!==null?(d<0?' (เลยแล้ว)':' (อีก '+d+' วัน)'):'')):'ของใช้ · ไม่มี EXP',
+        expStyle:'font:400 11px "IBM Plex Mono",monospace;color:'+(i.exp&&d!==null&&d<=3?'#C9524F':'#9A90BC')};
+    });
+
+    // history
+    var histList=S.hist.filter(function(e){
+      if(S.histMode==='item') return !S.histQuery.trim() || e.name.indexOf(S.histQuery.trim())>=0;
+      if(S.histMode==='loc') return !S.histLoc || e.to===S.histLoc || e.from===S.histLoc;
+      var d=e.date.slice(0,10); return d>=S.histFrom && d<=S.histTo;
+    }).map(function(e){
+      var color={ADD:'#5B49C9',MOVE:'#2E8F86',USE:'#C4692F',ADJUST:'#8B82A6'}[e.evt];
+      var label={ADD:'เก็บเข้าบ้าน',MOVE:'ย้าย',USE:'ใช้',ADJUST:'ปรับจำนวน'}[e.evt];
+      var tint={ADD:'#F3F0FE',MOVE:'#E9F7F5',USE:'#FFF2E8',ADJUST:'#F5F2FA'}[e.evt];
+      return {title:label+' · '+e.name,date:e.date.slice(5),
+        titleStyle:'font:500 14px Mitr,sans-serif;color:'+color,
+        codeLabel:e.evt==='MOVE'?(e.from+' → '+e.to):e.to,
+        codeStyle:'flex:none;border-radius:11px;padding:6px 9px;font:500 10.5px "IBM Plex Mono",monospace;letter-spacing:.6px;color:#ffffff;background:'+color+';box-shadow:3px 4px 9px rgba(90,68,180,.22),inset 2px 2px 5px rgba(255,255,255,.24)',
+        detail:(e.evt==='MOVE'?(self.locLabel(e.from)+' → '+self.locLabel(e.to)):self.locLabel(e.to))+' · '+e.qty+' หน่วย',
+        who:e.who, initial:e.who.slice(0,1),
+        avatarStyle:'width:22px;height:22px;flex:none;border-radius:8px;display:grid;place-items:center;font:500 10.5px Mitr,sans-serif;color:#ffffff;background:'+color+';box-shadow:2px 3px 7px rgba(90,68,180,.24)',
+        whoStyle:'font:500 12.5px Mitr,sans-serif;color:'+color,
+        cardStyle:'border-radius:20px;padding:13px 15px;background:'+tint+';border:1.5px solid '+color+';box-shadow:7px 9px 20px rgba(120,95,175,.14),-4px -5px 12px #ffffff,inset 2px 2px 5px rgba(255,255,255,.7)',
+        dot:'width:14px;height:14px;border-radius:50%;margin:14px 0 4px;background:'+color+';box-shadow:0 0 0 5px rgba(255,255,255,.9),3px 4px 9px rgba(120,95,175,.3)'};
+    });
+
+    // shopping groups
+    var mk=function(g){
+      return shop.filter(function(r){return r.group===g;}).map(function(r){
+        var isB=g==='bought';
+        return {name:r.name, code:r.code, tick:isB?'✓':'', codeStyle:self.codeBadge(false),
+          nameStyle:'font:500 14.5px Mitr,sans-serif;color:'+(isB?'#8B82A6':'#3A3254')+(isB?';text-decoration:line-through':''),
+          detail:isB?'ซื้อแล้ว · ยังไม่เพิ่ม stock (รอบันทึก ADD)':(r.qty<=0?'หมดแล้ว · ขั้นต่ำ '+r.min:'เหลือ '+r.qty+' · ขั้นต่ำ '+r.min),
+          cardStyle:'display:flex;align-items:center;gap:13px;border-radius:22px;padding:14px 16px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff'+(isB?';opacity:.7':''),
+          tickStyle:'width:34px;height:34px;flex:none;border:none;border-radius:12px;cursor:pointer;font:500 15px Mitr,sans-serif;color:#ffffff;background:'+(isB?'linear-gradient(145deg,#5FC79E,#2E8F6B)':'#F1ECFA')+';box-shadow:'+(isB?'4px 5px 12px rgba(46,143,107,.3)':'inset 3px 4px 9px rgba(120,95,175,.2),inset -2px -2px 6px #ffffff'),
+          on: isB ? function(){ self.setState({bought:S.bought.filter(function(x){return x!==r.name;})}); }
+                  : function(){ self.setState({sheet:{kind:'buy',name:r.name}}); }};
+      });
+    };
+    var groups=[
+      {title:'หมดแล้ว',count:mk('out').length+' รายการ',rows:mk('out'),empty:mk('out').length===0,dot:'width:11px;height:11px;border-radius:50%;background:#D9605C;box-shadow:0 0 0 4px rgba(217,96,92,.16)'},
+      {title:'ใกล้หมด',count:mk('low').length+' รายการ',rows:mk('low'),empty:mk('low').length===0,dot:'width:11px;height:11px;border-radius:50%;background:#E0A02F;box-shadow:0 0 0 4px rgba(224,160,47,.16)'},
+      {title:'ซื้อแล้ว',count:mk('bought').length+' รายการ',rows:mk('bought'),empty:mk('bought').length===0,dot:'width:11px;height:11px;border-radius:50%;background:#3EA57C;box-shadow:0 0 0 4px rgba(62,165,124,.16)'}
+    ];
+
+    // settings rows
+    var sq=S.setQuery.trim().toLowerCase();
+    var setRows=items.filter(function(i){ return !sq || (i.name+i.loc).toLowerCase().indexOf(sq)>=0; }).map(function(i){
+      var patch=function(k,v){ self.setState({items:S.items.map(function(x){return x.id===i.id?Object.assign({},x,{min:k==='min'?v:x.min,target:k==='target'?v:x.target}):x;})}); };
+      return {name:i.name,qty:i.qty,code:i.loc||'ยังไม่ระบุ',codeStyle:self.codeBadge(true),
+        kindLabel:i.kind==='food'?'ของกิน':'ของใช้',
+        del:function(){ self.setState({sheet:{kind:'delItem',id:i.id,name:i.name},sheetText:''}); },
+        toggleTrack:function(){ self.setState({items:S.items.map(function(x){return x.id===i.id?Object.assign({},x,{noStock:!x.noStock}):x;})}); },
+        trackLabel:i.noStock?'ไม่นับสต็อก (ของคงทน)':'นับสต็อก · ตั้งขั้นต่ำได้',
+        trackStyle:'border:none;cursor:pointer;text-align:left;border-radius:13px;padding:8px 10px;font:500 10.5px Mitr,sans-serif;'
+          +(i.noStock
+            ? 'color:#8B82A6;background:#F1ECFA;box-shadow:inset 2px 3px 7px rgba(120,95,175,.16),inset -2px -2px 6px #ffffff'
+            : 'color:#2E8F6B;background:#E9F7EF;box-shadow:inset 2px 3px 7px rgba(46,143,107,.14),2px 3px 8px rgba(46,143,107,.12)'),
+        fields:i.noStock?[]:[
+        {label:'MINIMUM',value:i.min,inc:function(){patch('min',i.min+1);},dec:function(){patch('min',Math.max(0,i.min-1));}},
+        {label:'TARGET',value:i.target,inc:function(){patch('target',i.target+1);},dec:function(){patch('target',Math.max(1,i.target-1));}}
+      ]};
+    });
+
+    // places
+    var pq=S.placeQuery.trim().toLowerCase();
+    var placeRows=S.locs.filter(function(l){ return !pq || (l.name+l.room+l.code).toLowerCase().indexOf(pq)>=0; }).map(function(l){
+      var patch=function(fields){
+        self.setState({locs:S.locs.map(function(x){ return x.code===l.code ? Object.assign({},x,fields,{label:(fields.code||x.code)+' · '+(fields.room||x.room)+' – '+(fields.name||x.name)}) : x; })});
+      };
+      return {code:l.code, name:l.name, room:l.room,
+        itemCount:items.filter(function(i){return i.loc===l.code;}).length+' items',
+        setCode:function(e){
+          var v=e.target.value.toUpperCase();
+          if(S.locs.filter(function(x){return x.code===v && x.code!==l.code;}).length){ self.flash('⚠ รหัส '+v+' ถูกใช้แล้ว — ต้องไม่ซ้ำ'); return; }
+          self.setState({
+            locs:S.locs.map(function(x){ return x.code===l.code ? Object.assign({},x,{code:v,label:v+' · '+x.room+' – '+x.name}) : x; }),
+            items:S.items.map(function(i){ return i.loc===l.code ? Object.assign({},i,{loc:v}) : i; })
+          });
+        },
+        setName:function(e){ patch({name:e.target.value}); },
+        setRoom:function(e){ patch({room:e.target.value}); },
+        del:function(){
+          if(items.filter(function(i){return i.loc===l.code && i.qty>0;}).length){ self.flash('ยังมีของอยู่ใน '+l.code+' — ย้ายของออกก่อนลบ'); return; }
+          self.setState({sheet:{kind:'delPlace',code:l.code,name:l.name},sheetText:''});
+        }};
+    });
+
+    // sheet
+    var sheet=S.sheet, sheetActions=[], sheetTitle='', sheetSub='';
+    var prim='border:none;cursor:pointer;border-radius:20px;padding:16px;font:500 15px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:8px 11px 22px rgba(90,68,180,.32),-4px -6px 12px rgba(255,255,255,.5),inset 2px 3px 6px rgba(255,255,255,.26)';
+    var sec='border:none;cursor:pointer;border-radius:20px;padding:16px;font:500 15px Mitr,sans-serif;color:#5B5375;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.16),inset -3px -4px 10px #ffffff';
+    if(sheet && sheet.kind==='cam'){
+      var evtLabel={ADD:'เก็บของ',MOVE:'ย้ายของ',USE:'ใช้ของ'}[S.camEvt];
+      sheetTitle='บันทึกเลย หรือส่งเข้ารายการรอบันทึก?';
+      sheetSub='รูป '+S.camShots.length+' รูป · ประเภท '+evtLabel;
+      sheetActions=[
+        {label:'บันทึกเลย ('+evtLabel+')',style:prim,on:function(){
+          var scr={ADD:'add',MOVE:'move',USE:'use'}[S.camEvt];
+          self.setState({sheet:null,screen:scr,camShots:[]});
+        }},
+        {label:'ส่งเข้ารายการรอบันทึก',style:sec,on:function(){
+          var p={id:'p'+Date.now(),name:'ของจากรูปใหม่',src:'IN-APP',shots:S.camShots.slice(),evt:S.camEvt,ready:false,miss:'ยังไม่ได้ระบุชื่อ / จำนวน / สถานที่'};
+          self.setState({sheet:null,screen:'pending',camShots:[],pending:[p].concat(S.pending)});
+          self.flash('ส่งเข้ารายการรอบันทึกแล้ว');
+        }}
+      ];
+    }
+    var sheetHasInput=false, sheetHasChips=false, sheetChips=[], sheetInputPh='';
+    if(sheet && sheet.kind==='newItem'){
+      sheetTitle='เพิ่มรายการของในบ้าน';
+      sheetSub='ตั้งชื่อและประเภท — จำนวนเริ่มต้น 0 ชิ้น รอบันทึก ADD';
+      sheetHasInput=true; sheetInputPh='ชื่อของ เช่น ถ่าน AA';
+      sheetHasChips=true;
+      sheetChips=[['supply','ของใช้'],['food','ของกิน']].map(function(k){
+        return {label:k[1],style:self.chip(S.newKind===k[0],true),on:function(){ self.setState({newKind:k[0]}); }};
+      });
+      sheetActions=[
+        {label:'เพิ่มรายการ',style:prim,on:function(){
+          var name=S.sheetText.trim();
+          if(!name){ self.flash('ใส่ชื่อของก่อน'); return; }
+          var dup=S.items.filter(function(i){return i.name.trim().toLowerCase()===name.toLowerCase();})[0];
+          if(dup){ self.flash('⚠ มี “'+name+'” อยู่แล้วที่ '+dup.loc+' — ใช้ ADD เพื่อเพิ่มจำนวนแทน'); return; }
+          self.setState({sheet:null,sheetText:'',
+            items:S.items.concat([{id:Date.now(),name:name,kind:S.newKind,qty:0,loc:'',owner:S.owner,date:'2026-09-06',exp:null,min:1,target:2}])});
+          self.flash('เพิ่ม “'+name+'” เข้ารายการแล้ว');
+        }},
+        {label:'ยกเลิก',style:sec,on:function(){ self.setState({sheet:null,sheetText:''}); }}
+      ];
+    }
+    var placeRoomChips=[], placeRoomIsNew=false, placeCodeVal='', placeCodeHint='', sheetHasPlace=false;
+    if(sheet && sheet.kind==='newPlace'){
+      sheetHasPlace=true;
+      var rooms=[]; S.locs.forEach(function(l){ if(rooms.indexOf(l.room)<0) rooms.push(l.room); });
+      var room=S.placeRoom==='__new' ? S.placeRoomCustom.trim() : (S.placeRoom || rooms[0]);
+      placeRoomIsNew=S.placeRoom==='__new';
+      placeRoomChips=rooms.concat(['+ หลักใหม่']).map(function(r){
+        var key=r==='+ หลักใหม่'?'__new':r;
+        return {label:r,style:self.chip((S.placeRoom||rooms[0])===key,false),on:function(){ self.setState({placeRoom:key,placeCode:''}); }};
+      });
+      placeCodeVal=S.placeCode || self.autoCode(room);
+      placeCodeHint='ตั้งตาม location หลัก แล้ว run เลขต่อไปเรื่อย ๆ';
+      sheetTitle='เพิ่มสถานที่จัดเก็บ';
+      sheetSub='เลือก location หลัก แล้วพิมพ์ location รอง เช่น “ลิ้นชักล่างสุด”';
+      sheetHasInput=true; sheetInputPh='location รอง เช่น ลิ้นชักล่างสุด';
+      sheetActions=[
+        {label:'สร้างสถานที่',style:prim,on:function(){
+          var name=S.sheetText.trim(), code=(S.placeCode||self.autoCode(room)).toUpperCase();
+          if(!room){ self.flash('ระบุ location หลักก่อน'); return; }
+          if(!name){ self.flash('ใส่ชื่อ location รองก่อน'); return; }
+          if(S.locs.filter(function(x){return x.code===code;}).length){ self.flash('⚠ รหัส '+code+' ถูกใช้แล้ว — ต้องไม่ซ้ำ'); return; }
+          if(S.locs.filter(function(x){return x.room===room && x.name===name;}).length){ self.flash('⚠ มี “'+room+' – '+name+'” อยู่แล้ว'); return; }
+          self.setState({sheet:null,sheetText:'',setTab:'places',placeCode:'',placeRoom:'',placeRoomCustom:'',
+            locs:S.locs.concat([{code:code,name:name,room:room,label:code+' · '+room+' – '+name}])});
+          self.flash('สร้าง '+code+' · '+room+' – '+name+' แล้ว');
+        }},
+        {label:'ยกเลิก',style:sec,on:function(){ self.setState({sheet:null,sheetText:'',placeCode:'',placeRoom:'',placeRoomCustom:''}); }}
+      ];
+    }
+    if(sheet && sheet.kind==='delPlace'){
+      var okP=S.sheetText.trim().toLowerCase()==='delete';
+      sheetTitle='ลบสถานที่ “'+sheet.name+'” ('+sheet.code+')?';
+      sheetSub='พิมพ์คำว่า Delete เพื่อยืนยัน';
+      sheetHasInput=true; sheetInputPh='พิมพ์ Delete';
+      sheetActions=[
+        {label:okP?'ลบสถานที่นี้':'พิมพ์ Delete ให้ถูกต้องก่อน',
+          style:okP?'border:none;cursor:pointer;border-radius:20px;padding:16px;font:500 15px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#E07A76,#C24A46);box-shadow:8px 11px 22px rgba(194,74,70,.34),-4px -6px 12px rgba(255,255,255,.5)':sec+';opacity:.6',
+          on:function(){
+            if(!okP){ self.flash('ต้องพิมพ์ Delete เพื่อยืนยัน'); return; }
+            self.setState({sheet:null,sheetText:'',locs:S.locs.filter(function(x){return x.code!==sheet.code;})});
+            self.flash('ลบสถานที่ '+sheet.code+' แล้ว');
+          }},
+        {label:'ยกเลิก',style:sec,on:function(){ self.setState({sheet:null,sheetText:''}); }}
+      ];
+    }
+    if(sheet && sheet.kind==='delItem'){
+      var ok=S.sheetText.trim().toLowerCase()==='delete';
+      sheetTitle='ลบ “'+sheet.name+'” ออกจากระบบ?';
+      sheetSub='พิมพ์คำว่า Delete เพื่อยืนยัน — ประวัติเดิมยังอยู่ใน Audit trail';
+      sheetHasInput=true; sheetInputPh='พิมพ์ Delete';
+      sheetActions=[
+        {label:ok?'ลบรายการนี้':'พิมพ์ Delete ให้ถูกต้องก่อน',
+          style:ok?'border:none;cursor:pointer;border-radius:20px;padding:16px;font:500 15px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#E07A76,#C24A46);box-shadow:8px 11px 22px rgba(194,74,70,.34),-4px -6px 12px rgba(255,255,255,.5)':sec+';opacity:.6',
+          on:function(){
+            if(!ok){ self.flash('ต้องพิมพ์ Delete เพื่อยืนยัน'); return; }
+            self.setState({sheet:null,sheetText:'',items:S.items.filter(function(i){return i.id!==sheet.id;})});
+            self.flash('ลบ “'+sheet.name+'” แล้ว');
+          }},
+        {label:'ยกเลิก',style:sec,on:function(){ self.setState({sheet:null,sheetText:''}); }}
+      ];
+    }
+    if(sheet && sheet.kind==='buy'){
+      sheetTitle='ซื้อ “'+sheet.name+'” สำเร็จแล้วใช่ไหม?';
+      sheetSub='ยืนยันแล้วจะย้ายไปกลุ่มซื้อแล้ว แต่ stock จะเพิ่มเมื่อบันทึก ADD';
+      sheetActions=[
+        {label:'ยืนยัน',style:prim,on:function(){ self.setState({sheet:null,bought:S.bought.concat([sheet.name])}); self.flash('ติ๊ก “'+sheet.name+'” เป็นซื้อแล้ว'); }},
+        {label:'ยกเลิก',style:sec,on:function(){ self.setState({sheet:null}); }}
+      ];
+    }
+
+    var navItem=function(key){
+      var on=screen===key || (key==='inv'&&(screen==='use'||screen==='add'||screen==='move'));
+      return {on:self.nav(key),
+        style:'flex:1;min-width:0;border:none;cursor:pointer;border-radius:24px;padding:10px 4px 9px;color:'+(on?'#4E3CB8':'#9A90BC')
+          +';background:'+(on?'linear-gradient(150deg,rgba(255,255,255,.95),rgba(232,224,250,.75))':'transparent')
+          +';box-shadow:'+(on?'0 8px 18px rgba(90,68,150,.18),inset 2px 3px 7px rgba(255,255,255,.95),inset -3px -4px 9px rgba(120,95,175,.18)':'none')
+          +';display:flex;flex-direction:column;align-items:center;gap:4px;transition:color .2s ease',
+        labelStyle:'font:500 10px Mitr,sans-serif;color:'+(on?'#4E3CB8':'#9A90BC')};
+    };
+
+    return {
+      dw:440, dh:956,
+      themeWrap:'height:100%;filter:'+tone.f,
+      hTitle:h[0], hSub:h[1],
+      back: screen==='home' ? function(){} : this.nav('home'),
+      backStyle: screen==='home' ? 'display:none' : 'width:34px;height:34px;flex:none;border:none;border-radius:12px;background:#F8F3FD;box-shadow:4px 5px 12px rgba(120,95,175,.18),-3px -4px 10px #ffffff;cursor:pointer;display:grid;place-items:center',
+      goSet:this.nav('set'), goPending:this.nav('pending'), goCam:this.nav('cam'),
+      isHome:screen==='home', isPending:screen==='pending', isCam:screen==='cam', isAdd:screen==='add',
+      isMove:screen==='move', isUse:screen==='use', isInv:screen==='inv', isHist:screen==='hist',
+      isShop:screen==='shop', isSet:screen==='set',
+      todayLabel:'อาทิตย์ 6 ก.ย. 2569 · 09:12',
+      homeHeadline:'ของพร้อมใช้ '+ready+'% · ต้องดูด่วน '+(expiring.length+out.length)+' รายการ',
+      stats:[
+        {num:totalQty,label:'ชิ้นในบ้าน',numStyle:'font:500 21px Mitr,sans-serif;color:#ffffff'},
+        {num:expiring.length,label:'ใกล้หมดอายุ',numStyle:'font:500 21px Mitr,sans-serif;color:#FFD98A'},
+        {num:shop.length,label:'ต้องซื้อ',numStyle:'font:500 21px Mitr,sans-serif;color:#FFB3A6'}
+      ],
+      pendingCount:S.pending.length, pendingList:pendingList, pendingEmpty:S.pending.length===0,
+      quickActions:[
+        {label:'เก็บของ',sub:'ADD · หลายรายการ',sign:'+',on:this.nav('add'),dot:'width:40px;height:40px;border-radius:14px;display:grid;place-items:center;font:500 20px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:5px 6px 14px rgba(90,68,180,.3),inset 2px 2px 5px rgba(255,255,255,.3)'},
+        {label:'ค้นหาของ',sub:'สถานที่ / ชื่อของ',sign:'⌕',on:this.nav('inv'),dot:'width:40px;height:40px;border-radius:14px;display:grid;place-items:center;font:500 20px Mitr,sans-serif;color:#5B49C9;background:#EFE9FC;box-shadow:inset 3px 4px 9px rgba(120,95,175,.2),inset -2px -2px 7px #ffffff'},
+        {label:'ย้ายของ',sub:'MOVE · เปลี่ยนที่เก็บ',sign:'⇄',on:this.nav('move'),dot:'width:40px;height:40px;border-radius:14px;display:grid;place-items:center;font:500 18px Mitr,sans-serif;color:#2E8F86;background:#E4F5F1;box-shadow:inset 3px 4px 9px rgba(46,143,134,.18),inset -2px -2px 7px #ffffff'},
+        {label:'ใช้ของ',sub:'USE · ตัดยอด',sign:'–',on:this.nav('use'),dot:'width:40px;height:40px;border-radius:14px;display:grid;place-items:center;font:500 20px Mitr,sans-serif;color:#C4692F;background:#FFEFE4;box-shadow:inset 3px 4px 9px rgba(196,105,47,.18),inset -2px -2px 7px #ffffff'}
+      ],
+      showAlerts:this.props.showAlerts !== false,
+      alerts:alerts.slice(0,5),
+      lineSummary:'📦 ใกล้หมดอายุ '+expiring.length+' รายการ · ของหมด '+out.length+' รายการ\n🛒 ต้องซื้อ '+shop.length+' รายการ · รอบันทึก '+S.pending.length+' รูป',
+      camShootItem:function(){ self.setState({camShots:S.camShots.concat(['สิ่งของ '+(S.camShots.length+1)])}); },
+      camShootPlace:function(){ self.setState({camShots:S.camShots.concat(['ที่เก็บ (option)'])}); },
+      camClear:function(){ self.setState({camShots:[]}); },
+      camClearStyle:S.camShots.length?this.ghost():'display:none',
+      camCount:S.camShots.length,
+      camThumbs:S.camShots.map(function(s,si){return {label:s,style:self.shot(s,86),
+        on:function(){ self.setState({viewer:{shots:S.camShots,idx:si,src:'รูปที่ถ่ายในแอพ'}}); }};}),
+      viewerOpen:!!S.viewer,
+      viewerLabel:S.viewer?S.viewer.shots[S.viewer.idx]:'',
+      viewerMeta:S.viewer?(S.viewer.src+' · '+(S.viewer.idx+1)+'/'+S.viewer.shots.length):'',
+      viewerNavStyle:'border:none;cursor:pointer;border-radius:16px;padding:12px 16px;font:500 12.5px Mitr,sans-serif;color:#ffffff;background:rgba(255,255,255,.16);box-shadow:inset 2px 3px 8px rgba(255,255,255,.22)',
+      viewerPrev:function(e){ e.stopPropagation(); var v=S.viewer; if(!v) return; self.setState({viewer:{shots:v.shots,idx:(v.idx-1+v.shots.length)%v.shots.length,src:v.src}}); },
+      viewerNext:function(e){ e.stopPropagation(); var v=S.viewer; if(!v) return; self.setState({viewer:{shots:v.shots,idx:(v.idx+1)%v.shots.length,src:v.src}}); },
+      closeViewer:function(){ self.setState({viewer:null}); },
+      camEvents:camEvents,
+      camSave:function(){ if(!S.camShots.length){ self.flash('ถ่ายรูปอย่างน้อย 1 รูปก่อน'); return; } self.setState({sheet:{kind:'cam'}}); },
+      ownerChips:['เก่ง','omo'].map(function(o){ return {label:o,style:self.chip(S.owner===o,true),on:function(){ self.setState({owner:o}); }}; }),
+      locOptions:S.locs,
+      addRows:addRows, addRow:function(){ self.setState({addRows:S.addRows.concat([{name:'',kind:'supply',qty:1,loc:'',locQuery:'',expMode:'days',expVal:''}])}); },
+      addSave:this.addSave(), addSaveLabel:'บันทึกเก็บของ '+S.addRows.length+' รายการ',
+      moveRows:moveRows, moveAddRow:function(){ self.setState({moveRows:S.moveRows.concat([{query:'',itemId:null,qty:1,to:'',locQuery:''}])}); },
+      moveSave:this.moveSave(), moveSaveLabel:'บันทึกการย้าย '+S.moveRows.length+' รายการ',
+      useQuery:S.useQuery, setUseQuery:function(e){ self.setState({useQuery:e.target.value,useId:null}); },
+      useSuggest:useSuggest, usePicked:!!usePick,
+      useName:usePick?usePick.name:'', useMeta:usePick?(usePick.loc+' — เหลือ '+usePick.qty):'',
+      useQty:S.useQty, useInc:function(){ self.setState({useQty:Math.min(usePick?usePick.qty:99,S.useQty+1)}); },
+      useDec:function(){ self.setState({useQty:Math.max(1,S.useQty-1)}); },
+      useWarn:useWarn, useWarnStyle:useWarnStyle, useSave:this.useSave(),
+      invQuery:S.invQuery, setInvQuery:function(e){ self.setState({invQuery:e.target.value,invLoc:null}); },
+      invModes:[['all','ทั้งหมด'],['loc','สถานที่'],['item','สิ่งของ']].map(function(m){
+        return {label:m[1],style:self.chip(S.invMode===m[0]&&!S.invLoc,true),on:function(){ self.setState({invMode:m[0],invLoc:null}); }};
+      }),
+      invShowLocs:showLocs, invLocCount:locMatch.length,
+      invLocs:locMatch.map(function(l){
+        return {code:l.code,name:l.name,room:l.room,short:l.code.slice(0,3),
+          count:items.filter(function(i){return i.loc===l.code;}).reduce(function(a,i){return a+i.qty;},0)+' ชิ้น',
+          on:function(){ self.setState({invLoc:l.code,invQuery:l.name}); }};
+      }),
+      invShowItems:showItems, invItemCount:invItems.length, invItems:invItems,
+      histModes:[['item','ชื่อของ'],['date','ช่วงเวลา'],['loc','สถานที่']].map(function(m){
+        return {label:m[1],style:self.chip(S.histMode===m[0],true),on:function(){ self.setState({histMode:m[0]}); }};
+      }),
+      histIsItem:S.histMode==='item', histIsDate:S.histMode==='date', histIsLoc:S.histMode==='loc',
+      histQuery:S.histQuery, setHistQuery:function(e){ self.setState({histQuery:e.target.value}); },
+      histLoc:S.histLoc, setHistLoc:function(e){ self.setState({histLoc:e.target.value}); },
+      histFrom:S.histFrom, setHistFrom:function(e){ self.setState({histFrom:e.target.value}); },
+      histTo:S.histTo, setHistTo:function(e){ self.setState({histTo:e.target.value}); },
+      histRanges:[['เมื่อวาน','2026-09-05','2026-09-05'],['สัปดาห์นี้','2026-08-31','2026-09-06'],['30 วัน','2026-08-07','2026-09-06']].map(function(d){
+        return {label:d[0],style:self.chip(S.histFrom===d[1]&&S.histTo===d[2],false),on:function(){ self.setState({histFrom:d[1],histTo:d[2]}); }};
+      }),
+      histCount:histList.length, histList:histList,
+      shopGroups:groups,
+      tones:['lilac','peach','mint'].map(function(k){
+        var t=TONE[k], on=(S.tone||self.props.tone||'lilac')===k;
+        return {label:t.label,on:function(){ self.setState({tone:k}); },
+          style:'flex:1;border:none;cursor:pointer;border-radius:22px;padding:14px 10px;background:#FBF6FE;box-shadow:'+(on?'inset 4px 5px 12px rgba(120,95,175,.2),inset -3px -3px 9px #ffffff':'8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff'),
+          swatch:'width:100%;height:34px;border-radius:14px;background:'+t.sw+';box-shadow:inset 2px 3px 7px rgba(255,255,255,.35),3px 4px 10px rgba(90,68,180,.25)'};
+      }),
+      setTabs:[['places','สถานที่จัดเก็บ'],['items','รายการของในบ้าน']].map(function(t){
+        return {label:t[1],style:self.chip(S.setTab===t[0],true),on:function(){ self.setState({setTab:t[0]}); }};
+      }),
+      isSetPlaces:S.setTab==='places', isSetItems:S.setTab==='items',
+      placeQuery:S.placeQuery, setPlaceQuery:function(e){ self.setState({placeQuery:e.target.value}); },
+      placeCount:S.locs.length, placeEmpty:placeRows.length===0, placeRows:placeRows,
+      placeAddOpen:function(){ self.setState({sheet:{kind:'newPlace'},sheetText:''}); },
+      setRows:setRows, setCount:setRows.length, setEmpty:setRows.length===0,
+      setQuery:S.setQuery, setSetQuery:function(e){ self.setState({setQuery:e.target.value}); },
+      setAddOpen:function(){ self.setState({sheet:{kind:'newItem'},sheetText:''}); },
+      useCount:useSuggest.length,
+      sheetHasInput:sheetHasInput, sheetHasChips:sheetHasChips, sheetChips:sheetChips,
+      sheetHasPlace:sheetHasPlace, placeRoomChips:placeRoomChips, placeRoomIsNew:placeRoomIsNew,
+      placeRoomCustom:S.placeRoomCustom,
+      setPlaceRoomCustom:function(e){ self.setState({placeRoomCustom:e.target.value,placeCode:''}); },
+      placeCodeVal:placeCodeVal, placeCodeHint:placeCodeHint,
+      setPlaceCode:function(e){ self.setState({placeCode:e.target.value.toUpperCase()}); },
+      sheetInputVal:S.sheetText, sheetInputPh:sheetInputPh,
+      sheetInputSet:function(e){ self.setState({sheetText:e.target.value}); },
+      toast:S.toast,
+      toastStyle:S.toast?'position:absolute;left:22px;right:22px;bottom:118px;z-index:55;border-radius:20px;padding:14px 16px;font:500 12.5px/1.5 Mitr,sans-serif;color:#ffffff;background:rgba(58,46,92,.94);box-shadow:0 14px 30px rgba(60,42,110,.35);animation:clayIn .25s ease both':'display:none',
+      navHome:navItem('home'), navInv:navItem('inv'), navShop:navItem('shop'), navHist:navItem('hist'),
+      sheetOpen:!!sheet, sheetTitle:sheetTitle, sheetSub:sheetSub, sheetActions:sheetActions,
+      closeSheet:function(){ self.setState({sheet:null}); },
+      stop:function(e){ e.stopPropagation(); }
+    };
+  }
+}
+</script>
+</body>
+</html>
