@@ -1,10 +1,7 @@
 import { useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
-import { PENDING, TODAY, TODAY_ISO, TONE } from "./data";
+import { PENDING, TODAY, TONE } from "./data";
 import type { Hist, Item, Kind, Loc } from "./data";
 import {
-  applyAdd,
-  applyMove,
-  applyUse,
   autoCode,
   days,
   freshHist,
@@ -16,6 +13,7 @@ import {
   locSug,
   shopRows,
 } from "./logic";
+import { applyMutation, type Msg } from "./mutations";
 import { css } from "./css";
 import { IOSFrame } from "./IOSFrame";
 import { chip, codeBadge, DANGER, ghost, PRIM, pill, SEC, shot } from "./ui";
@@ -195,6 +193,17 @@ export function App() {
     toastTimer.current = setTimeout(() => set({ toast: "" }), 2600);
   };
 
+  const dispatch = (msg: Msg, toastFor?: (r: Record<string, unknown>) => string) => {
+    const res = applyMutation({ items: s.items, locations: s.locs, history: s.hist }, msg, s.owner);
+    if ("error" in res) {
+      flash(res.error);
+      return false;
+    }
+    set({ items: res.snapshot.items, locs: res.snapshot.locations, hist: res.snapshot.history });
+    if (toastFor) flash(toastFor(res.result));
+    return true;
+  };
+
   const tone = TONE[s.tone || "lilac"] || TONE.lilac;
   const locLabel = (code: string) => locLabelOf(s.locs, code);
   const item = (id: number | null) => itemOf(s.items, id);
@@ -235,43 +244,50 @@ export function App() {
   };
 
   const addSave = () => {
-    const res = applyAdd(s.items, s.hist, s.addRows, s.owner);
-    if ("error" in res) return flash(res.error);
-    set({
-      items: res.items,
-      hist: res.hist,
-      screen: "inv",
-      invMode: "item",
-      invQuery: "",
-      invLoc: null,
-      addRows: [freshAddRow()],
-    });
-    flash(`บันทึกเก็บของ ${res.added} รายการ โดย ${s.owner}`);
+    if (
+      dispatch(
+        { type: "add", addRows: s.addRows },
+        (r) => `บันทึกเก็บของ ${r.added} รายการ โดย ${s.owner}`,
+      )
+    )
+      set({ screen: "inv", invMode: "item", invQuery: "", invLoc: null, addRows: [freshAddRow()] });
   };
   const moveSave = () => {
-    const res = applyMove(
-      s.items,
-      s.hist,
-      s.moveRows.map((r) => ({ itemId: r.itemId, qty: r.qty, to: r.to })),
+    const res = applyMutation(
+      { items: s.items, locations: s.locs, history: s.hist },
+      { type: "move", moveRows: s.moveRows.map((r) => ({ itemId: r.itemId, qty: r.qty, to: r.to })) },
       s.owner,
     );
     if ("error" in res) return flash(res.error);
     set({
-      items: res.items,
-      hist: res.hist,
+      items: res.snapshot.items,
+      locs: res.snapshot.locations,
+      hist: res.snapshot.history,
       screen: "inv",
       invMode: "loc",
-      invLoc: res.firstTo,
+      invLoc: (res.result.firstTo as string) ?? null,
       moveRows: [freshMoveRow()],
     });
-    flash(`ย้าย ${res.moved} รายการ โดย ${s.owner}`);
+    flash(`ย้าย ${res.result.moved} รายการ โดย ${s.owner}`);
   };
   const useSave = () => {
-    const res = applyUse(s.items, s.hist, s.useId, s.useQty, s.owner);
+    const res = applyMutation(
+      { items: s.items, locations: s.locs, history: s.hist },
+      { type: "use", useId: s.useId, useQty: s.useQty },
+      s.owner,
+    );
     if ("error" in res) return flash(res.error);
-    set({ items: res.items, hist: res.hist, useId: null, useQuery: "", useQty: 1 });
-    if (res.left <= 0) flash(`⚠ ${res.name} หมดแล้ว — เพิ่มเข้ารายการซื้ออัตโนมัติ`);
-    else flash(`ใช้ ${res.name} ${res.used} หน่วย · เหลือ ${res.left}`);
+    set({
+      items: res.snapshot.items,
+      locs: res.snapshot.locations,
+      hist: res.snapshot.history,
+      useId: null,
+      useQuery: "",
+      useQty: 1,
+    });
+    const left = res.result.left as number;
+    if (left <= 0) flash(`⚠ ${res.result.name} หมดแล้ว — เพิ่มเข้ารายการซื้ออัตโนมัติ`);
+    else flash(`ใช้ ${res.result.name} ${res.result.used} หน่วย · เหลือ ${left}`);
   };
 
   // ── derived ────────────────────────────────────────────────────────────────
@@ -282,6 +298,7 @@ export function App() {
     set,
     flash,
     nav,
+    dispatch,
     onAddSave: addSave,
     onMoveSave: moveSave,
     onUseSave: useSave,
@@ -366,6 +383,7 @@ type Helpers = {
   set: (patch: Partial<State>) => void;
   flash: (t: string) => void;
   nav: (screen: Screen) => () => void;
+  dispatch: (msg: Msg, toastFor?: (r: Record<string, unknown>) => string) => boolean;
   onAddSave: () => void;
   onMoveSave: () => void;
   onUseSave: () => void;
@@ -379,7 +397,7 @@ function build(
   item: (id: number | null) => Item | undefined,
   H: Helpers,
 ) {
-  const { set, flash, nav, onAddSave, onMoveSave, onUseSave } = H;
+  const { set, flash, nav, dispatch, onAddSave, onMoveSave, onUseSave } = H;
   const items = s.items;
   const screen = s.screen;
   const d = homeDerived(items, TODAY);
@@ -700,13 +718,7 @@ function build(
     .filter((i) => !sq || (i.name + i.loc).toLowerCase().includes(sq))
     .map((i) => {
       const patch = (k: "min" | "target", vv: number) =>
-        set({
-          items: s.items.map((x) =>
-            x.id === i.id
-              ? { ...x, min: k === "min" ? vv : x.min, target: k === "target" ? vv : x.target }
-              : x,
-          ),
-        });
+        dispatch({ type: "setItemField", id: i.id, [k]: vv });
       return {
         key: i.id,
         name: i.name,
@@ -715,8 +727,7 @@ function build(
         codeStyle: codeBadge(true),
         kindLabel: i.kind === "food" ? "ของกิน" : "ของใช้",
         del: () => set({ sheet: { kind: "delItem", id: i.id, name: i.name }, sheetText: "" }),
-        toggleTrack: () =>
-          set({ items: s.items.map((x) => (x.id === i.id ? { ...x, noStock: !x.noStock } : x)) }),
+        toggleTrack: () => dispatch({ type: "setItemField", id: i.id, noStock: !i.noStock }),
         trackLabel: i.noStock ? "ไม่นับสต็อก (ของคงทน)" : "นับสต็อก · ตั้งขั้นต่ำได้",
         trackStyle:
           "border:none;cursor:pointer;text-align:left;border-radius:13px;padding:8px 10px;font:500 10.5px Mitr,sans-serif;" +
@@ -738,17 +749,7 @@ function build(
     .filter((l) => !pq || (l.name + l.room + l.code).toLowerCase().includes(pq))
     .map((l) => {
       const patch = (fields: Partial<Loc>) =>
-        set({
-          locs: s.locs.map((x) =>
-            x.code === l.code
-              ? {
-                  ...x,
-                  ...fields,
-                  label: `${fields.code || x.code} · ${fields.room || x.room} – ${fields.name || x.name}`,
-                }
-              : x,
-          ),
-        });
+        dispatch({ type: "renamePlace", code: l.code, name: fields.name, room: fields.room });
       return {
         key: l.code,
         code: l.code,
@@ -757,16 +758,7 @@ function build(
         itemCount: `${items.filter((i) => i.loc === l.code).length} items`,
         setCode: (e: ChangeEvent<HTMLInputElement>) => {
           const vv = e.target.value.toUpperCase();
-          if (s.locs.filter((x) => x.code === vv && x.code !== l.code).length) {
-            flash(`⚠ รหัส ${vv} ถูกใช้แล้ว — ต้องไม่ซ้ำ`);
-            return;
-          }
-          set({
-            locs: s.locs.map((x) =>
-              x.code === l.code ? { ...x, code: vv, label: `${vv} · ${x.room} – ${x.name}` } : x,
-            ),
-            items: s.items.map((i) => (i.loc === l.code ? { ...i, loc: vv } : i)),
-          });
+          dispatch({ type: "setPlaceCode", code: l.code, newCode: vv });
         },
         setName: (e: ChangeEvent<HTMLInputElement>) => patch({ name: e.target.value }),
         setRoom: (e: ChangeEvent<HTMLInputElement>) => patch({ room: e.target.value }),
@@ -845,29 +837,8 @@ function build(
         style: PRIM,
         on: () => {
           const name = s.sheetText.trim();
-          if (!name) return flash("ใส่ชื่อของก่อน");
-          const dup = s.items.find((i) => i.name.trim().toLowerCase() === name.toLowerCase());
-          if (dup) return flash(`⚠ มี “${name}” อยู่แล้วที่ ${dup.loc} — ใช้ ADD เพื่อเพิ่มจำนวนแทน`);
-          set({
-            sheet: null,
-            sheetText: "",
-            items: [
-              ...s.items,
-              {
-                id: Date.now(),
-                name,
-                kind: s.newKind,
-                qty: 0,
-                loc: "",
-                owner: s.owner,
-                date: TODAY_ISO,
-                exp: null,
-                min: 1,
-                target: 2,
-              },
-            ],
-          });
-          flash(`เพิ่ม “${name}” เข้ารายการแล้ว`);
+          if (dispatch({ type: "newItem", name, kind: s.newKind }, () => `เพิ่ม “${name}” เข้ารายการแล้ว`))
+            set({ sheet: null, sheetText: "" });
         },
       },
       { label: "ยกเลิก", style: SEC, on: () => set({ sheet: null, sheetText: "" }) },
@@ -904,22 +875,20 @@ function build(
         on: () => {
           const name = s.sheetText.trim();
           const code = (s.placeCode || autoCode(s.locs, room)).toUpperCase();
-          if (!room) return flash("ระบุ location หลักก่อน");
-          if (!name) return flash("ใส่ชื่อ location รองก่อน");
-          if (s.locs.filter((x) => x.code === code).length)
-            return flash(`⚠ รหัส ${code} ถูกใช้แล้ว — ต้องไม่ซ้ำ`);
-          if (s.locs.filter((x) => x.room === room && x.name === name).length)
-            return flash(`⚠ มี “${room} – ${name}” อยู่แล้ว`);
-          set({
-            sheet: null,
-            sheetText: "",
-            setTab: "places",
-            placeCode: "",
-            placeRoom: "",
-            placeRoomCustom: "",
-            locs: [...s.locs, { code, name, room, label: `${code} · ${room} – ${name}` }],
-          });
-          flash(`สร้าง ${code} · ${room} – ${name} แล้ว`);
+          if (
+            dispatch(
+              { type: "newPlace", code, name, room },
+              () => `สร้าง ${code} · ${room} – ${name} แล้ว`,
+            )
+          )
+            set({
+              sheet: null,
+              sheetText: "",
+              setTab: "places",
+              placeCode: "",
+              placeRoom: "",
+              placeRoomCustom: "",
+            });
         },
       },
       {
@@ -942,8 +911,8 @@ function build(
         style: okP ? DANGER : SEC + ";opacity:.6",
         on: () => {
           if (!okP) return flash("ต้องพิมพ์ Delete เพื่อยืนยัน");
-          set({ sheet: null, sheetText: "", locs: s.locs.filter((x) => x.code !== sheet.code) });
-          flash(`ลบสถานที่ ${sheet.code} แล้ว`);
+          if (dispatch({ type: "delPlace", code: sheet.code }, () => `ลบสถานที่ ${sheet.code} แล้ว`))
+            set({ sheet: null, sheetText: "" });
         },
       },
       { label: "ยกเลิก", style: SEC, on: () => set({ sheet: null, sheetText: "" }) },
@@ -962,8 +931,8 @@ function build(
         style: ok ? DANGER : SEC + ";opacity:.6",
         on: () => {
           if (!ok) return flash("ต้องพิมพ์ Delete เพื่อยืนยัน");
-          set({ sheet: null, sheetText: "", items: s.items.filter((i) => i.id !== sheet.id) });
-          flash(`ลบ “${sheet.name}” แล้ว`);
+          if (dispatch({ type: "delItem", id: sheet.id }, () => `ลบ “${sheet.name}” แล้ว`))
+            set({ sheet: null, sheetText: "" });
         },
       },
       { label: "ยกเลิก", style: SEC, on: () => set({ sheet: null, sheetText: "" }) },
