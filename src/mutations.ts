@@ -66,7 +66,7 @@ export function applyMutation(snap: Snapshot, msg: Msg, owner: string): Mutation
       const name = msg.name.trim();
       if (!name) return { error: "ใส่ชื่อของก่อน" };
       const dup = items.find((i) => i.name.trim().toLowerCase() === name.toLowerCase());
-      if (dup) return { error: `⚠ มี "${name}" อยู่แล้วที่ ${dup.loc} — ใช้ ADD เพื่อเพิ่มจำนวนแทน` };
+      if (dup) return { error: `⚠ มี “${name}” อยู่แล้วที่ ${dup.loc} — ใช้ ADD เพื่อเพิ่มจำนวนแทน` };
       items.push({
         id: Date.now(),
         name,
@@ -107,7 +107,7 @@ export function applyMutation(snap: Snapshot, msg: Msg, owner: string): Mutation
       if (!room) return { error: "ระบุ location หลักก่อน" };
       if (!name) return { error: "ใส่ชื่อ location รองก่อน" };
       if (locations.some((l) => l.code === code)) return { error: `⚠ รหัส ${code} ถูกใช้แล้ว — ต้องไม่ซ้ำ` };
-      if (locations.some((l) => l.room === room && l.name === name)) return { error: `⚠ มี "${room} – ${name}" อยู่แล้ว` };
+      if (locations.some((l) => l.room === room && l.name === name)) return { error: `⚠ มี “${room} – ${name}” อยู่แล้ว` };
       locations.push({ code, name, room, label: label(code, room, name) });
       return { snapshot: { items, locations, history }, result: {} };
     }
