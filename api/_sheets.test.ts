@@ -3,6 +3,9 @@ import { freshItems, freshLocs } from "../src/logic";
 import {
   historyToRows, itemsToRows, locsToRows, rowsToHistory, rowsToItems, rowsToLocs,
 } from "./_sheets";
+import { readState, writeSnapshot, ensureSeeded } from "./_sheets";
+import { fakeClient } from "./_fakeClient";
+import { SEED } from "../src/data";
 
 describe("mappers", () => {
   it("items round-trip through rows", () => {
@@ -37,5 +40,40 @@ describe("mappers", () => {
     const rows = historyToRows(hist);
     expect(rows).toEqual([["2026-09-02 11:47","MOVE","powerbank","1","LIV-01","GAR-01","เก่ง"]]);
     expect(rowsToHistory([["ts","evt","name","qty","from","to","who"], ...rows])).toEqual(hist);
+  });
+});
+
+describe("readState / writeSnapshot", () => {
+  it("ensureSeeded creates tabs and seeds when empty", async () => {
+    const c = fakeClient();
+    const r = await ensureSeeded(c);
+    expect(r.created).toBe(true);
+    const state = await readState(c);
+    expect(state.items.length).toBe(SEED.items.length);
+    expect(state.locations.length).toBe(SEED.locations.length);
+  });
+
+  it("ensureSeeded is idempotent", async () => {
+    const c = fakeClient();
+    await ensureSeeded(c);
+    const r2 = await ensureSeeded(c);
+    expect(r2.created).toBe(false);
+    expect((await readState(c)).items.length).toBe(SEED.items.length);
+  });
+
+  it("writeSnapshot rewrites items/locations and appends only new history", async () => {
+    const c = fakeClient();
+    await ensureSeeded(c);
+    const prev = await readState(c);
+    const next = {
+      ...prev,
+      items: prev.items.map((i) => (i.name === "ทิชชู่" ? { ...i, qty: 0 } : i)),
+      history: [{ date: "2026-09-06 09:12", evt: "USE" as const, name: "ทิชชู่", qty: 1, to: "BAT-01", who: "omo" }, ...prev.history],
+    };
+    await writeSnapshot(c, prev, next);
+    const after = await readState(c);
+    expect(after.items.find((i) => i.name === "ทิชชู่")!.qty).toBe(0);
+    expect(after.history[0]).toMatchObject({ evt: "USE", name: "ทิชชู่" });
+    expect(after.history.length).toBe(prev.history.length + 1);
   });
 });

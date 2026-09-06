@@ -112,3 +112,9 @@ export const TONE: Record<string, Tone> = {
 
 export const NOW_STAMP = "2026-09-06 09:12";
 export const TODAY_ISO = "2026-09-06";
+
+export const SEED = {
+  items: ITEMS.map((i) => ({ ...i })),
+  locations: LOCS.map((l) => ({ ...l })),
+  history: HIST.slice(),
+};
