@@ -1,4 +1,12 @@
-import { useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { PENDING, TODAY, TONE } from "./data";
 import type { Hist, Item, Kind, Loc } from "./data";
 import {
@@ -13,7 +21,8 @@ import {
   locSug,
   shopRows,
 } from "./logic";
-import { applyMutation, type Msg } from "./mutations";
+import { applyMutation, type Msg, type Snapshot } from "./mutations";
+import { fetchState, mutate } from "./api";
 import { css } from "./css";
 import { IOSFrame } from "./IOSFrame";
 import { chip, codeBadge, DANGER, ghost, PRIM, pill, SEC, shot } from "./ui";
@@ -76,6 +85,8 @@ type Sheet =
   | { kind: "buy"; name: string };
 
 interface State {
+  loading: boolean;
+  online: boolean;
   tone: string | null;
   screen: Screen;
   locs: Loc[];
@@ -130,6 +141,8 @@ const freshMoveRow = (query = "", itemId: number | null = null): MoveRow => ({
 });
 
 const initial = (): State => ({
+  loading: true,
+  online: true,
   tone: null,
   screen: "home",
   locs: freshLocs(),
@@ -194,14 +207,61 @@ export function App() {
   };
 
   const dispatch = (msg: Msg, toastFor?: (r: Record<string, unknown>) => string) => {
-    const res = applyMutation({ items: s.items, locations: s.locs, history: s.hist }, msg, s.owner);
-    if ("error" in res) {
-      flash(res.error);
+    const prev: Snapshot = { items: s.items, locations: s.locs, history: s.hist };
+    const local = applyMutation(prev, msg, s.owner);
+    if ("error" in local) {
+      flash(local.error);
       return false;
     }
-    set({ items: res.snapshot.items, locs: res.snapshot.locations, hist: res.snapshot.history });
-    if (toastFor) flash(toastFor(res.result));
+    set({
+      items: local.snapshot.items,
+      locs: local.snapshot.locations,
+      hist: local.snapshot.history,
+    });
+    if (toastFor) flash(toastFor(local.result));
+    if (s.online) {
+      mutate(msg, s.owner)
+        .then(({ snapshot }) =>
+          set({ items: snapshot.items, locs: snapshot.locations, hist: snapshot.history }),
+        )
+        .catch((e) => {
+          set({ items: prev.items, locs: prev.locations, hist: prev.history });
+          flash(`บันทึกไม่สำเร็จ · ${(e as Error).message}`);
+        });
+    }
     return true;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchState()
+      .then((snap) => {
+        if (!cancelled)
+          set({ items: snap.items, locs: snap.locations, hist: snap.history, loading: false });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          set({ loading: false, online: false });
+          flash("ออฟไลน์ · ใช้ข้อมูลตัวอย่าง");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fieldTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const debouncedField = (id: number, patch: { min?: number; target?: number }) => {
+    set({ items: s.items.map((x) => (x.id === id ? { ...x, ...patch } : x)) });
+    clearTimeout(fieldTimers.current[id]);
+    fieldTimers.current[id] = setTimeout(() => {
+      if (s.online)
+        mutate({ type: "setItemField", id, ...patch }, s.owner)
+          .then(({ snapshot }) =>
+            set({ items: snapshot.items, locs: snapshot.locations, hist: snapshot.history }),
+          )
+          .catch((e) => flash(`บันทึกไม่สำเร็จ · ${(e as Error).message}`));
+    }, 600);
   };
 
   const tone = TONE[s.tone || "lilac"] || TONE.lilac;
@@ -243,21 +303,43 @@ export function App() {
     });
   };
 
-  const addSave = () => {
-    if (
-      dispatch(
-        { type: "add", addRows: s.addRows },
-        (r) => `บันทึกเก็บของ ${r.added} รายการ โดย ${s.owner}`,
+  const syncOrRollback = (msg: Msg, prev: Snapshot) => {
+    if (!s.online) return;
+    mutate(msg, s.owner)
+      .then(({ snapshot }) =>
+        set({ items: snapshot.items, locs: snapshot.locations, hist: snapshot.history }),
       )
-    )
-      set({ screen: "inv", invMode: "item", invQuery: "", invLoc: null, addRows: [freshAddRow()] });
+      .catch((e) => {
+        set({ items: prev.items, locs: prev.locations, hist: prev.history });
+        flash(`บันทึกไม่สำเร็จ · ${(e as Error).message}`);
+      });
+  };
+
+  const addSave = () => {
+    const prev: Snapshot = { items: s.items, locations: s.locs, history: s.hist };
+    const msg: Msg = { type: "add", addRows: s.addRows };
+    const res = applyMutation(prev, msg, s.owner);
+    if ("error" in res) return flash(res.error);
+    set({
+      items: res.snapshot.items,
+      locs: res.snapshot.locations,
+      hist: res.snapshot.history,
+      screen: "inv",
+      invMode: "item",
+      invQuery: "",
+      invLoc: null,
+      addRows: [freshAddRow()],
+    });
+    flash(`บันทึกเก็บของ ${res.result.added} รายการ โดย ${s.owner}`);
+    syncOrRollback(msg, prev);
   };
   const moveSave = () => {
-    const res = applyMutation(
-      { items: s.items, locations: s.locs, history: s.hist },
-      { type: "move", moveRows: s.moveRows.map((r) => ({ itemId: r.itemId, qty: r.qty, to: r.to })) },
-      s.owner,
-    );
+    const prev: Snapshot = { items: s.items, locations: s.locs, history: s.hist };
+    const msg: Msg = {
+      type: "move",
+      moveRows: s.moveRows.map((r) => ({ itemId: r.itemId, qty: r.qty, to: r.to })),
+    };
+    const res = applyMutation(prev, msg, s.owner);
     if ("error" in res) return flash(res.error);
     set({
       items: res.snapshot.items,
@@ -269,13 +351,12 @@ export function App() {
       moveRows: [freshMoveRow()],
     });
     flash(`ย้าย ${res.result.moved} รายการ โดย ${s.owner}`);
+    syncOrRollback(msg, prev);
   };
   const useSave = () => {
-    const res = applyMutation(
-      { items: s.items, locations: s.locs, history: s.hist },
-      { type: "use", useId: s.useId, useQty: s.useQty },
-      s.owner,
-    );
+    const prev: Snapshot = { items: s.items, locations: s.locs, history: s.hist };
+    const msg: Msg = { type: "use", useId: s.useId, useQty: s.useQty };
+    const res = applyMutation(prev, msg, s.owner);
     if ("error" in res) return flash(res.error);
     set({
       items: res.snapshot.items,
@@ -288,6 +369,7 @@ export function App() {
     const left = res.result.left as number;
     if (left <= 0) flash(`⚠ ${res.result.name} หมดแล้ว — เพิ่มเข้ารายการซื้ออัตโนมัติ`);
     else flash(`ใช้ ${res.result.name} ${res.result.used} หน่วย · เหลือ ${left}`);
+    syncOrRollback(msg, prev);
   };
 
   // ── derived ────────────────────────────────────────────────────────────────
@@ -299,6 +381,7 @@ export function App() {
     flash,
     nav,
     dispatch,
+    debouncedField,
     onAddSave: addSave,
     onMoveSave: moveSave,
     onUseSave: useSave,
@@ -330,16 +413,28 @@ export function App() {
 
           {/* scroll area */}
           <div style={st("flex:1;overflow-y:auto;padding:8px 22px 140px")}>
-            {s.screen === "home" && <HomeScreen v={v} />}
-            {s.screen === "pending" && <PendingScreen v={v} />}
-            {s.screen === "cam" && <CamScreen v={v} />}
-            {s.screen === "add" && <AddScreen v={v} />}
-            {s.screen === "move" && <MoveScreen v={v} />}
-            {s.screen === "use" && <UseScreen v={v} />}
-            {s.screen === "inv" && <InvScreen v={v} />}
-            {s.screen === "hist" && <HistScreen v={v} />}
-            {s.screen === "shop" && <ShopScreen v={v} />}
-            {s.screen === "set" && <SetScreen v={v} />}
+            {s.loading ? (
+              <div style={st("display:grid;place-items:center;height:60vh")}>
+                <div
+                  style={st(
+                    "width:34px;height:34px;border-radius:50%;border:3px solid #C6B9E6;border-top-color:#6A57D6;animation:spin .8s linear infinite",
+                  )}
+                />
+              </div>
+            ) : (
+              <>
+                {s.screen === "home" && <HomeScreen v={v} />}
+                {s.screen === "pending" && <PendingScreen v={v} />}
+                {s.screen === "cam" && <CamScreen v={v} />}
+                {s.screen === "add" && <AddScreen v={v} />}
+                {s.screen === "move" && <MoveScreen v={v} />}
+                {s.screen === "use" && <UseScreen v={v} />}
+                {s.screen === "inv" && <InvScreen v={v} />}
+                {s.screen === "hist" && <HistScreen v={v} />}
+                {s.screen === "shop" && <ShopScreen v={v} />}
+                {s.screen === "set" && <SetScreen v={v} />}
+              </>
+            )}
           </div>
 
           {/* bottom nav */}
@@ -384,6 +479,7 @@ type Helpers = {
   flash: (t: string) => void;
   nav: (screen: Screen) => () => void;
   dispatch: (msg: Msg, toastFor?: (r: Record<string, unknown>) => string) => boolean;
+  debouncedField: (id: number, patch: { min?: number; target?: number }) => void;
   onAddSave: () => void;
   onMoveSave: () => void;
   onUseSave: () => void;
@@ -397,7 +493,7 @@ function build(
   item: (id: number | null) => Item | undefined,
   H: Helpers,
 ) {
-  const { set, flash, nav, dispatch, onAddSave, onMoveSave, onUseSave } = H;
+  const { set, flash, nav, dispatch, debouncedField, onAddSave, onMoveSave, onUseSave } = H;
   const items = s.items;
   const screen = s.screen;
   const d = homeDerived(items, TODAY);
@@ -718,7 +814,7 @@ function build(
     .filter((i) => !sq || (i.name + i.loc).toLowerCase().includes(sq))
     .map((i) => {
       const patch = (k: "min" | "target", vv: number) =>
-        dispatch({ type: "setItemField", id: i.id, [k]: vv });
+        debouncedField(i.id, k === "min" ? { min: vv } : { target: vv });
       return {
         key: i.id,
         name: i.name,
