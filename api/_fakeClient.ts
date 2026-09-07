@@ -1,5 +1,5 @@
 // api/_fakeClient.ts — in-memory SheetsClient for tests
-import type { SheetsClient } from "./_sheets";
+import type { SheetsClient } from "./_sheets.js";
 
 export function fakeClient(
   initial: Record<string, string[][]> = {},

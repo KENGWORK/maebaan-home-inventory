@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import type { Msg } from "../src/mutations";
-import { realClient } from "./_sheets";
-import { runMutation } from "./_run";
+import type { Msg } from "../src/mutations.js";
+import { realClient } from "./_sheets.js";
+import { runMutation } from "./_run.js";
 
 const TYPES: Msg["type"][] = [
   "add", "move", "use", "newItem", "delItem", "setItemField",

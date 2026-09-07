@@ -1,6 +1,6 @@
-import { TODAY_ISO } from "./data";
-import type { Hist, Item, Kind, Loc } from "./data";
-import { applyAdd, applyMove, applyUse } from "./logic";
+import { TODAY_ISO } from "./data.js";
+import type { Hist, Item, Kind, Loc } from "./data.js";
+import { applyAdd, applyMove, applyUse } from "./logic.js";
 
 export interface Snapshot {
   items: Item[];

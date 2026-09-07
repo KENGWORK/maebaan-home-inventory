@@ -1,7 +1,7 @@
 import { JWT } from "google-auth-library";
-import type { Hist, HistEvt, Item, Kind, Loc } from "../src/data";
-import { SEED } from "../src/data";
-import type { Snapshot } from "../src/mutations";
+import type { Hist, HistEvt, Item, Kind, Loc } from "../src/data.js";
+import { SEED } from "../src/data.js";
+import type { Snapshot } from "../src/mutations.js";
 
 export const ITEM_COLS = ["id","name","kind","qty","loc","owner","date","exp","min","target","noStock"] as const;
 export const LOC_COLS = ["code","name","room"] as const;

@@ -1,5 +1,5 @@
-import { applyMutation, type Msg, type Snapshot } from "../src/mutations";
-import { readState, writeSnapshot, type SheetsClient } from "./_sheets";
+import { applyMutation, type Msg, type Snapshot } from "../src/mutations.js";
+import { readState, writeSnapshot, type SheetsClient } from "./_sheets.js";
 
 export async function runMutation(
   c: SheetsClient,

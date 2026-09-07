@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { freshItems, freshLocs } from "../src/logic";
+import { freshItems, freshLocs } from "../src/logic.js";
 import {
   historyToRows, itemsToRows, locsToRows, rowsToHistory, rowsToItems, rowsToLocs,
-} from "./_sheets";
-import { readState, writeSnapshot, ensureSeeded } from "./_sheets";
-import { HIST_COLS, ITEM_COLS, LOC_COLS } from "./_sheets";
-import { fakeClient } from "./_fakeClient";
-import { SEED } from "../src/data";
+} from "./_sheets.js";
+import { readState, writeSnapshot, ensureSeeded } from "./_sheets.js";
+import { HIST_COLS, ITEM_COLS, LOC_COLS } from "./_sheets.js";
+import { fakeClient } from "./_fakeClient.js";
+import { SEED } from "../src/data.js";
 
 describe("mappers", () => {
   it("items round-trip through rows", () => {

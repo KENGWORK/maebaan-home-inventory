@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { readState, realClient } from "./_sheets";
+import { readState, realClient } from "./_sheets.js";
 
 export default async function handler(_req: VercelRequest, res: VercelResponse) {
   try {

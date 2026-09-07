@@ -1,8 +1,8 @@
 // Pure domain logic ported from design/Home Inventory.dc.html.
 // Everything here is side-effect free so it can be unit tested and reused by the UI.
 
-import { HIST, ITEMS, LOCS, nowStamp, TODAY, TODAY_ISO } from "./data";
-import type { Hist, Item, Loc } from "./data";
+import { HIST, ITEMS, LOCS, nowStamp, TODAY, TODAY_ISO } from "./data.js";
+import type { Hist, Item, Loc } from "./data.js";
 
 /** Next free item id: max existing + 1 (deterministic, unlike Date.now()). */
 const nextId = (items: Item[]): number => Math.max(0, ...items.map((i) => i.id)) + 1;

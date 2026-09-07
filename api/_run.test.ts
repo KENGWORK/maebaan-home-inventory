@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ensureSeeded, readState } from "./_sheets";
-import { fakeClient } from "./_fakeClient";
-import { runMutation } from "./_run";
+import { ensureSeeded, readState } from "./_sheets.js";
+import { fakeClient } from "./_fakeClient.js";
+import { runMutation } from "./_run.js";
 
 describe("runMutation", () => {
   it("USE persists to the fake sheet and returns result", async () => {
