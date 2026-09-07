@@ -110,11 +110,16 @@ export const TONE: Record<string, Tone> = {
   mint: { f: "hue-rotate(112deg) saturate(.88)", label: "มินต์เย็น", sw: "linear-gradient(145deg,#4FC0A8,#2E8F86)" },
 };
 
-export const NOW_STAMP = "2026-09-06 09:12";
 export const TODAY_ISO = "2026-09-06";
 
-/** Real wall-clock stamp for audit rows: "YYYY-MM-DD HH:MM:SS". */
-export const nowStamp = () => new Date().toISOString().slice(0, 19).replace("T", " ");
+/** Real Asia/Bangkok wall-clock stamp for audit rows: "YYYY-MM-DD HH:MM:SS". */
+export const nowStamp = () => new Date().toLocaleString("sv-SE", { timeZone: "Asia/Bangkok" });
+
+/** Real Asia/Bangkok date "YYYY-MM-DD", `daysAgo` days before now (default today). */
+export const localDateISO = (daysAgo = 0) =>
+  new Date(Date.now() - daysAgo * 86_400_000).toLocaleDateString("sv-SE", {
+    timeZone: "Asia/Bangkok",
+  });
 
 export const SEED = {
   items: ITEMS.map((i) => ({ ...i })),

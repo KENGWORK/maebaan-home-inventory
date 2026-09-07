@@ -7,7 +7,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { PENDING, TODAY, TONE } from "./data";
+import { localDateISO, PENDING, TODAY, TONE } from "./data";
 import type { Hist, Item, Kind, Loc } from "./data";
 import {
   autoCode,
@@ -175,8 +175,8 @@ const initial = (): State => ({
   histMode: "item",
   histQuery: "",
   histLoc: "",
-  histFrom: "2026-08-30",
-  histTo: "2026-09-06",
+  histFrom: localDateISO(7),
+  histTo: localDateISO(0),
 });
 
 const st = (decl: string): CSSProperties => css(decl);
@@ -1273,10 +1273,10 @@ function build(
     setHistTo: (e: ChangeEvent<HTMLInputElement>) => set({ histTo: e.target.value }),
     histRanges: (
       [
-        ["เมื่อวาน", "2026-09-05", "2026-09-05"],
-        ["สัปดาห์นี้", "2026-08-31", "2026-09-06"],
-        ["30 วัน", "2026-08-07", "2026-09-06"],
-      ] as const
+        ["เมื่อวาน", localDateISO(1), localDateISO(1)],
+        ["สัปดาห์นี้", localDateISO(6), localDateISO(0)],
+        ["30 วัน", localDateISO(30), localDateISO(0)],
+      ] as [string, string, string][]
     ).map((dr) => ({
       label: dr[0],
       style: chip(s.histFrom === dr[1] && s.histTo === dr[2], false),
