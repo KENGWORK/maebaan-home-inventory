@@ -1,17 +1,45 @@
 # แม่บ้าน Maebaan · Home Inventory
 
 Thai-language household inventory mobile app. Implementation of
-`design/Home Inventory.dc.html` (Claude Design canvas doc) as a runnable
-Vite + React + TypeScript app.
+`design/Home Inventory.dc.html` (Claude Design canvas doc) as a
+Vite + React + TypeScript app, backed by a Google Sheet via Vercel
+serverless functions.
+
+**Live:** https://maebaan-home-inventory.vercel.app
 
 ## Run
 
 ```bash
 npm install
-npm run dev      # http://localhost:5273
+npx vercel dev   # http://localhost:5273 — app + /api together (needs env, below)
+npm run dev      # plain Vite — /api unavailable, app runs on seed data (ตัวอย่าง pill)
 npm run build    # type-check + production bundle -> dist/
-npm test         # vitest (pure domain logic)
+npm test         # vitest — 59 tests (domain logic, mappers, mutate handler)
 ```
+
+## Backend
+
+- `api/state.ts` `GET`  → `{ items, locations, history }` from the Sheet
+- `api/mutate.ts` `POST` → `{ type, owner, ...payload }` → applies `applyMutation`, writes the Sheet, returns the fresh snapshot
+- `api/init.ts` `POST`  → idempotent: creates the 3 tabs + headers + seed from `src/data.ts` if empty
+- Auth: `google-auth-library` JWT from env `GOOGLE_SERVICE_ACCOUNT_JSON`; sheet id from env `SHEET_ID`. Server-only.
+- The Sheet must be shared with the service-account email as **Editor**.
+- Concurrency: last-write-wins; `items`/`locations` tabs rewritten in full per mutation, `history` append-only (newest-first on read, Asia/Bangkok timestamps).
+- The client writes to `/api` only after a successful `GET /api/state` (`hydrated`); a boot-time failure = local-only demo session on seed data.
+
+### Vercel env vars
+
+| var | value |
+| --- | --- |
+| `SHEET_ID` | the id from the Sheet URL |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | full contents of the service-account JSON key |
+
+After the first deploy, `POST /api/init` once to seed the Sheet.
+
+## Design & build docs
+
+`docs/superpowers/specs/2026-09-06-sheets-backend-vercel-design.md` (spec),
+`docs/superpowers/plans/2026-09-06-sheets-backend-vercel.md` (implementation plan).
 
 ## What it does
 
