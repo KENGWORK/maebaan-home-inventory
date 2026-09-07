@@ -86,6 +86,10 @@ type Sheet =
 
 interface State {
   loading: boolean;
+  /** True once `fetchState` has returned real server state. Until then the app is
+   *  running on the local seed and must NOT write to the server — the seed's
+   *  pinned ids have nothing to do with the live sheet's rows. */
+  hydrated: boolean;
   online: boolean;
   tone: string | null;
   screen: Screen;
@@ -142,6 +146,7 @@ const freshMoveRow = (query = "", itemId: number | null = null): MoveRow => ({
 
 const initial = (): State => ({
   loading: true,
+  hydrated: false,
   online: true,
   tone: null,
   screen: "home",
@@ -200,6 +205,9 @@ export function App() {
   // Kept in sync every render so debounced closures never fire with a stale owner.
   const ownerRef = useRef(s.owner);
   ownerRef.current = s.owner;
+  // Same reason: the debounce timer fires long after the render that scheduled it.
+  const hydratedRef = useRef(s.hydrated);
+  hydratedRef.current = s.hydrated;
 
   const set = (patch: Partial<State>) => setS((prev) => ({ ...prev, ...patch }));
   const nav = (screen: Screen) => () => set({ screen, sheet: null });
@@ -210,13 +218,15 @@ export function App() {
   };
 
   /**
-   * Always attempt the server write — a success flips `online` back to true, so the
-   * client heals itself without a reload. On failure we only roll the optimistic
-   * change back if we *believed* we were online; once the offline pill is showing,
-   * the local apply stands so the app stays usable without a backend.
+   * Attempt the server write — but only once we hold server-sourced state. A
+   * boot-offline client is running the local seed, whose pinned ids do not match
+   * any live sheet, so writing from it would corrupt real data; it stays a
+   * local-only demo session until reload. A success flips `online` back to true,
+   * so a client that *is* hydrated heals itself after a blip; a failure always
+   * rolls the optimistic change back, since `hydrated` makes that unambiguous.
    */
   const syncOrRollback = (msg: Msg, prev: Snapshot) => {
-    const wasOnline = s.online;
+    if (!s.hydrated) return;
     mutate(msg, s.owner)
       .then(({ snapshot }) =>
         set({
@@ -227,7 +237,6 @@ export function App() {
         }),
       )
       .catch((e) => {
-        if (!wasOnline) return set({ online: false });
         set({ items: prev.items, locs: prev.locations, hist: prev.history, online: false });
         flash(`บันทึกไม่สำเร็จ · ${(e as Error).message}`);
       });
@@ -255,7 +264,13 @@ export function App() {
     fetchState()
       .then((snap) => {
         if (!cancelled)
-          set({ items: snap.items, locs: snap.locations, hist: snap.history, loading: false });
+          set({
+            items: snap.items,
+            locs: snap.locations,
+            hist: snap.history,
+            loading: false,
+            hydrated: true,
+          });
       })
       .catch(() => {
         if (!cancelled) {
@@ -286,8 +301,20 @@ export function App() {
     [],
   );
 
-  const debouncedMutate = (key: string, msg: Msg): boolean => {
-    const probe = applyMutation({ items: s.items, locations: s.locs, history: s.hist }, msg, s.owner);
+  /**
+   * `serverMsg` is what the coalesced write sends; `localMsg` is what we apply
+   * optimistically. They differ whenever a keystroke changes the row's own
+   * identity: a place-code edit renames GAR-01 → GAR-0 → GAR-0X locally one
+   * keystroke at a time, while the server — which still knows the row as
+   * GAR-01 — must receive the single NET rename GAR-01 → GAR-0X. Sending the
+   * incremental message instead would 400 on a code the server never saw.
+   */
+  const debouncedMutate = (key: string, serverMsg: Msg, localMsg: Msg = serverMsg): boolean => {
+    const probe = applyMutation(
+      { items: s.items, locations: s.locs, history: s.hist },
+      localMsg,
+      s.owner,
+    );
     if ("error" in probe) {
       flash(probe.error);
       return false;
@@ -296,16 +323,20 @@ export function App() {
     setS((prev) => {
       const r = applyMutation(
         { items: prev.items, locations: prev.locs, history: prev.hist },
-        msg,
+        localMsg,
         prev.owner,
       );
       if ("error" in r) return prev;
       return { ...prev, items: r.snapshot.items, locs: r.snapshot.locations, hist: r.snapshot.history };
     });
-    pendingPatch.current[key] = msg; // latest message per key wins
+    // A non-hydrated client is a local-only demo session: the optimistic apply
+    // above still lands so the UI works, but nothing goes to the server.
+    if (!s.hydrated) return true;
+    pendingPatch.current[key] = serverMsg; // latest message per key wins
     clearTimeout(debounceTimers.current[key]);
     const wasOnline = s.online;
     debounceTimers.current[key] = setTimeout(() => {
+      if (!hydratedRef.current) return;
       const m = pendingPatch.current[key];
       delete pendingPatch.current[key];
       mutate(m, ownerRef.current)
@@ -320,8 +351,8 @@ export function App() {
           });
         })
         .catch((e) => {
-          // The optimistic apply stands (see syncOrRollback) — a debounced field
-          // edit has no meaningful "before" left to roll back to by this point.
+          // Known minor: the optimistic apply stands. A debounced field edit has
+          // coalesced away its "before" by this point, so it reverts on reload.
           set({ online: false });
           if (wasOnline) flash(`บันทึกไม่สำเร็จ · ${(e as Error).message}`);
         });
@@ -344,13 +375,22 @@ export function App() {
     });
   };
 
-  const setPlaceCodeDebounced = (code: string, newCode: string) => {
-    const origin = placeOrigin.current[code] ?? code;
-    if (!debouncedMutate(`place-${origin}-code`, { type: "setPlaceCode", code: origin, newCode }))
-      return;
-    const applied = newCode.trim().toUpperCase();
-    delete placeOrigin.current[code];
-    if (applied !== origin) placeOrigin.current[applied] = origin;
+  /**
+   * `cur` is the row's code in current (already-optimistically-renamed) state;
+   * `raw` is what the user has now typed. The row's identity as far as the SERVER
+   * is concerned is still `origin` — the code it had when this edit began — so we
+   * carry that forward under each new code the row takes, keeping both the
+   * debounce key and the server message stable across keystrokes.
+   */
+  const setPlaceCodeDebounced = (cur: string, raw: string) => {
+    const origin = placeOrigin.current[cur] ?? cur;
+    // Remember the origin under the NEW code so the next keystroke still knows it.
+    placeOrigin.current[raw] = origin;
+    debouncedMutate(
+      `place-${origin}-code`, // stable: origin never changes mid-edit
+      { type: "setPlaceCode", code: origin, newCode: raw }, // server: net rename
+      { type: "setPlaceCode", code: cur, newCode: raw }, // local: incremental
+    );
   };
 
   const tone = TONE[s.tone || "lilac"] || TONE.lilac;
@@ -486,7 +526,14 @@ export function App() {
               <div style={st("font:400 12.5px/1.45 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:2px")}>{h[1]}</div>
             </div>
             <div style={st("display:flex;align-items:center;gap:8px;flex:none")}>
-              {!s.online && (
+              {/* Never hydrated → local-only seed session; hydrated but a write
+                  failed → offline. `online` is meaningless before hydration. */}
+              {!s.loading && !s.hydrated && (
+                <div style={st("font:500 10px 'IBM Plex Mono',monospace;color:#9A90BC;background:#F1ECFA;border-radius:8px;padding:4px 8px")}>
+                  ตัวอย่าง
+                </div>
+              )}
+              {s.hydrated && !s.online && (
                 <div style={st("font:500 10px 'IBM Plex Mono',monospace;color:#9A90BC;background:#F1ECFA;border-radius:8px;padding:4px 8px")}>
                   ออฟไลน์
                 </div>
@@ -935,9 +982,15 @@ function build(
   const pq = s.placeQuery.trim().toLowerCase();
   const placeRows = s.locs
     .filter((l) => !pq || (l.name + l.room + l.code).toLowerCase().includes(pq))
-    .map((l) => {
+    .map((l, idx) => {
       return {
-        key: l.code,
+        // Position, NOT `l.code`: a code edit rewrites `l.code` on every
+        // keystroke, and a changing key remounts the row — which blurs the input
+        // the user is typing into, so every character after the first is lost.
+        // The list neither reorders nor changes length mid-edit, so the index is
+        // stable exactly when it needs to be; the inputs are controlled, so a
+        // reused node across a filter change just takes the new values.
+        key: idx,
         code: l.code,
         name: l.name,
         room: l.room,
