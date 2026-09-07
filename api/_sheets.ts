@@ -178,16 +178,24 @@ export async function ensureSeeded(c: SheetsClient): Promise<{ created: boolean 
   const missing = TABS.filter((t) => !existing.includes(t));
   if (missing.length) await c.addTabs(missing);
   const g = await c.batchGet([...TABS]);
-  // A tab that exists but lost/never had its header gets just the header rewritten.
+  // Never rewrite a header over a tab that already holds rows: a partially
+  // corrupted sheet is a manual-fix situation, not something to auto-clobber.
+  // We only warn, and we refuse to seed on top of it.
+  let mismatched = false;
   for (const t of TABS) {
     const rows = g[t] ?? [];
     if (rows.length && !sameHeader(rows[0], HEADERS[t])) {
-      await c.updateRange(`${t}!A1`, [HEADERS[t]]);
+      console.warn(`${t} tab header mismatch — leaving it untouched (manual fix required)`);
+      mismatched = true;
     }
   }
-  // "header only, no data" counts as empty and gets seeded.
-  const empty = (g.items ?? []).length <= 1;
-  if (!empty) return { created: false };
+  // Seed only when `items` is genuinely empty: no rows at all, or exactly the
+  // expected header and no data. One row that is NOT the header is data we do
+  // not understand — warn and skip rather than overwrite it.
+  const itemRows = g.items ?? [];
+  const empty =
+    itemRows.length === 0 || (itemRows.length === 1 && sameHeader(itemRows[0], HEADERS.items));
+  if (!empty || mismatched) return { created: false };
   await c.updateRange("items!A1", itemsToRows(SEED.items));
   await c.updateRange("locations!A1", locsToRows(SEED.locations));
   // SEED.history is newest-first; the sheet wants chronological ascending.

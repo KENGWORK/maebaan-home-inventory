@@ -104,6 +104,38 @@ describe("applyMutation", () => {
       .toEqual({ error: expect.any(String) });
   });
 
+  // Fix 1 — the client applies keystroke-incremental renames locally while the
+  // server gets one net rename; both paths must land on the same snapshot.
+  it("setPlaceCode: local incremental + server net rename compose to the same result", () => {
+    let s2: Snapshot = { items: freshItems(), locations: freshLocs(), history: freshHist() };
+    // simulate 2 optimistic keystrokes GAR-01 -> GAR-0 -> GAR-0X
+    for (const [code, newCode] of [["GAR-01", "GAR-0"], ["GAR-0", "GAR-0X"]] as const) {
+      const r = applyMutation(s2, { type: "setPlaceCode", code, newCode }, "เก่ง");
+      if ("error" in r) throw new Error(r.error);
+      s2 = r.snapshot;
+    }
+    // server applies the net rename in one shot
+    const server = applyMutation(
+      { items: freshItems(), locations: freshLocs(), history: freshHist() },
+      { type: "setPlaceCode", code: "GAR-01", newCode: "GAR-0X" },
+      "เก่ง",
+    );
+    if ("error" in server) throw new Error(server.error);
+    expect(s2.locations.find((l) => l.code === "GAR-0X")).toBeTruthy();
+    expect(server.snapshot.locations.find((l) => l.code === "GAR-0X")).toBeTruthy();
+    // items cascade the same
+    expect(s2.items.filter((i) => i.loc === "GAR-0X").length)
+      .toBe(server.snapshot.items.filter((i) => i.loc === "GAR-0X").length);
+  });
+
+  // Fix 2 — an out-of-sync client must get a real error, not a fake 200
+  it("renamePlace / setPlaceCode: unknown code -> { error }", () => {
+    expect(applyMutation(snap(), { type: "renamePlace", code: "NOPE-99", name: "x" }, "เก่ง"))
+      .toEqual({ error: expect.any(String) });
+    expect(applyMutation(snap(), { type: "setPlaceCode", code: "NOPE-99", newCode: "YEP-01" }, "เก่ง"))
+      .toEqual({ error: expect.any(String) });
+  });
+
   it("delPlace: rejects while items with qty>0 remain, else removes", () => {
     const s = snap();
     const busy = applyMutation(s, { type: "delPlace", code: "BAT-01" }, "เก่ง");

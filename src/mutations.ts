@@ -114,6 +114,9 @@ export function applyMutation(snap: Snapshot, msg: Msg, owner: string): Mutation
       return { snapshot: { items, locations, history }, result: {} };
     }
     case "renamePlace": {
+      // An out-of-sync client (or a hand-rolled body) must get a 400, not a
+      // silent no-op that reads as a successful save.
+      if (!locations.some((l) => l.code === msg.code)) return { error: "ไม่พบ location" };
       const next = locations.map((l) => {
         if (l.code !== msg.code) return l;
         const name = msg.name ?? l.name;
@@ -125,6 +128,7 @@ export function applyMutation(snap: Snapshot, msg: Msg, owner: string): Mutation
     case "setPlaceCode": {
       const newCode = msg.newCode.trim().toUpperCase();
       if (!newCode) return { error: "รหัส location ห้ามว่าง" };
+      if (!locations.some((l) => l.code === msg.code)) return { error: "ไม่พบ location" };
       if (locations.some((l) => l.code === newCode && l.code !== msg.code))
         return { error: `⚠ รหัส ${newCode} ถูกใช้แล้ว — ต้องไม่ซ้ำ` };
       const nextLocs = locations.map((l) =>

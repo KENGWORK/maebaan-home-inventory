@@ -4,6 +4,7 @@ import {
   historyToRows, itemsToRows, locsToRows, rowsToHistory, rowsToItems, rowsToLocs,
 } from "./_sheets";
 import { readState, writeSnapshot, ensureSeeded } from "./_sheets";
+import { HIST_COLS, ITEM_COLS, LOC_COLS } from "./_sheets";
 import { fakeClient } from "./_fakeClient";
 import { SEED } from "../src/data";
 
@@ -59,6 +60,39 @@ describe("readState / writeSnapshot", () => {
     const r2 = await ensureSeeded(c);
     expect(r2.created).toBe(false);
     expect((await readState(c)).items.length).toBe(SEED.items.length);
+  });
+
+  // Fix 4 — header-only tabs are "empty" and get seeded
+  it("ensureSeeded seeds a tab that holds exactly the expected header and no data", async () => {
+    const c = fakeClient({
+      items: [[...ITEM_COLS]],
+      locations: [[...LOC_COLS]],
+      history: [[...HIST_COLS]],
+    });
+    const r = await ensureSeeded(c);
+    expect(r.created).toBe(true);
+    expect((await readState(c)).items.length).toBe(SEED.items.length);
+  });
+
+  // Fix 4 — a tab with unrecognised content is left strictly alone
+  it("ensureSeeded never rewrites a header or seeds over a non-header first row", async () => {
+    const junk = [["ไม่ใช่หัวตาราง", "ข้อมูลมือ"]];
+    const c = fakeClient({ items: junk, locations: [[...LOC_COLS]], history: [[...HIST_COLS]] });
+    const r = await ensureSeeded(c);
+    expect(r.created).toBe(false);
+    // untouched: no header written over the row, no seed rows appended
+    expect(c.tabs.items).toEqual(junk);
+  });
+
+  it("ensureSeeded leaves a populated items tab with a bad header untouched", async () => {
+    const c = fakeClient();
+    await ensureSeeded(c);
+    const before = JSON.parse(JSON.stringify(c.tabs.items));
+    c.tabs.items[0] = ["oops", "wrong", "header"];
+    const r = await ensureSeeded(c);
+    expect(r.created).toBe(false);
+    expect(c.tabs.items[0]).toEqual(["oops", "wrong", "header"]);
+    expect(c.tabs.items.length).toBe(before.length);
   });
 
   it("writeSnapshot rewrites items/locations, clears the surplus tail and appends the given history", async () => {
