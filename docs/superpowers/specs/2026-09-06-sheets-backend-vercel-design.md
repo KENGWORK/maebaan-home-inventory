@@ -117,9 +117,12 @@ vercel.json         { "framework": "vite" }  + node runtime for /api
 - `App.tsx`:
   - On mount `fetchState()`; show a clay spinner inside the phone frame while
     pending. On failure → fall back to `src/data.ts` seed + one-time offline toast.
-  - `addSave`/`moveSave`/`useSave` and the sheet actions call `await mutate(...)`
-    then `set(returnedState)`. Network error → red toast `เชื่อมต่อไม่ได้ · ลองใหม่`,
-    local state untouched.
+  - `addSave`/`moveSave`/`useSave` and the sheet actions apply the mutation
+    optimistically, then call `mutate(...)` and `set(returnedState)`. A successful
+    write also sets `online: true`, so the client heals itself after a blip.
+    Network error → `online: false` (header shows an `ออฟไลน์` pill) and the
+    optimistic change is ROLLED BACK with a toast, provided the client believed it
+    was online; while already offline the local apply stands so the UI stays usable.
   - min/target steppers, place-code rename, noStock toggle: debounce ~600ms
     before calling `mutate` (avoid spamming the Sheet while holding a button).
 - `src/data.ts` seed retained (used by `/api/init` and offline fallback).
