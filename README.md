@@ -7,6 +7,10 @@ serverless functions.
 
 **Live:** https://maebaan-home-inventory.vercel.app
 
+Full-bleed on phones and installable (Add to Home Screen → standalone, no URL
+bar via `manifest.webmanifest` + `apple-mobile-web-app-capable`); on wide
+screens it renders inside a scaled iPhone frame (`src/IOSFrame.tsx`).
+
 ## Run
 
 ```bash
