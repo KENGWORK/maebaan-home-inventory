@@ -20,7 +20,7 @@ export function itemsToRows(items: Item[]): string[][] {
 }
 
 export function rowsToItems(rows: string[][]): Item[] {
-  return rows.slice(1).filter((r) => r[0] !== "" && r[0] !== undefined).map((r) => ({
+  return rows.slice(1).filter((r) => r[0] !== "" && r[0] !== undefined && !Number.isNaN(Number(r[0]))).map((r) => ({
     id: Number(r[0]),
     name: r[1] ?? "",
     kind: (r[2] as Kind) || "supply",
@@ -69,11 +69,18 @@ export interface SheetsClient {
 }
 
 export function realClient(): SheetsClient {
-  const key = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON as string);
+  let key: { client_email: string; private_key: string };
+  try {
+    key = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON as string);
+  } catch {
+    throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON");
+  }
+  if (!key.client_email || !key.private_key)
+    throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON missing client_email/private_key");
   const id = process.env.SHEET_ID as string;
   const jwt = new JWT({
     email: key.client_email,
-    key: (key.private_key as string).replace(/\\n/g, "\n"),
+    key: key.private_key.replace(/\\n/g, "\n"),
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
   const base = `https://sheets.googleapis.com/v4/spreadsheets/${id}`;
@@ -83,7 +90,11 @@ export function realClient(): SheetsClient {
       ...init,
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init?.headers ?? {}) },
     });
-    if (!res.ok) throw new Error(`Sheets ${res.status}: ${await res.text()}`);
+    if (!res.ok) {
+      // Body may echo the sheet id / service-account address — log it, never return it.
+      console.error("Sheets API", res.status, await res.text());
+      throw new Error(`Sheets API error ${res.status}`);
+    }
     return res.json();
   };
   return {
@@ -127,31 +138,62 @@ export async function readState(c: SheetsClient): Promise<Snapshot> {
   return {
     items: rowsToItems(g.items ?? []),
     locations: rowsToLocs(g.locations ?? []),
-    history: rowsToHistory(g.history ?? []),
+    // The sheet stores history chronological-ascending (append at the bottom);
+    // the app model is newest-first. Convert at the boundary.
+    history: rowsToHistory(g.history ?? []).reverse(),
   };
 }
 
-const histKey = (h: { date: string; evt: string; name: string }) => `${h.date}|${h.evt}|${h.name}`;
-
-export async function writeSnapshot(c: SheetsClient, prev: Snapshot, next: Snapshot): Promise<void> {
-  await c.clearRange("items!A2:K");
-  await c.updateRange("items!A1", itemsToRows(next.items));
-  await c.clearRange("locations!A2:C");
-  await c.updateRange("locations!A1", locsToRows(next.locations));
-  const known = new Set(prev.history.map(histKey));
-  const fresh = next.history.filter((h) => !known.has(histKey(h)));
-  if (fresh.length) await c.append("history!A1", historyToRows(fresh));
+/**
+ * Overwrite items/locations with `next` and append `appendHistory` (chronological
+ * ascending) to the history tab. Writes the new rows FIRST and only then clears the
+ * surplus tail, so a mid-write failure leaves stale-but-complete data rather than a
+ * truncated sheet, and readers never see an empty window.
+ */
+export async function writeSnapshot(
+  c: SheetsClient,
+  next: Snapshot,
+  appendHistory: Hist[],
+): Promise<void> {
+  const itemRows = itemsToRows(next.items); // header + N rows
+  await c.updateRange("items!A1", itemRows);
+  await c.clearRange(`items!A${itemRows.length + 1}:K`);
+  const locRows = locsToRows(next.locations);
+  await c.updateRange("locations!A1", locRows);
+  await c.clearRange(`locations!A${locRows.length + 1}:C`);
+  if (appendHistory.length) await c.append("history!A1", historyToRows(appendHistory));
 }
+
+const HEADERS: Record<string, string[]> = {
+  items: [...ITEM_COLS],
+  locations: [...LOC_COLS],
+  history: [...HIST_COLS],
+};
+
+const sameHeader = (row: string[] | undefined, want: string[]) =>
+  !!row && want.every((h, i) => row[i] === h);
 
 export async function ensureSeeded(c: SheetsClient): Promise<{ created: boolean }> {
   const existing = await c.listTabs();
   const missing = TABS.filter((t) => !existing.includes(t));
   if (missing.length) await c.addTabs(missing);
   const g = await c.batchGet([...TABS]);
-  const empty = (g.items ?? []).length === 0;
+  // A tab that exists but lost/never had its header gets just the header rewritten.
+  for (const t of TABS) {
+    const rows = g[t] ?? [];
+    if (rows.length && !sameHeader(rows[0], HEADERS[t])) {
+      await c.updateRange(`${t}!A1`, [HEADERS[t]]);
+    }
+  }
+  // "header only, no data" counts as empty and gets seeded.
+  const empty = (g.items ?? []).length <= 1;
   if (!empty) return { created: false };
   await c.updateRange("items!A1", itemsToRows(SEED.items));
   await c.updateRange("locations!A1", locsToRows(SEED.locations));
-  await c.updateRange("history!A1", [[...HIST_COLS], ...historyToRows(SEED.history)]);
+  // SEED.history is newest-first; the sheet wants chronological ascending.
+  await c.updateRange("history!A1", [
+    [...HIST_COLS],
+    ...historyToRows([...SEED.history].reverse()),
+  ]);
   return { created: true };
 }

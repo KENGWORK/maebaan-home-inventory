@@ -68,26 +68,28 @@ export function applyMutation(snap: Snapshot, msg: Msg, owner: string): Mutation
       const dup = items.find((i) => i.name.trim().toLowerCase() === name.toLowerCase());
       if (dup) return { error: `⚠ มี “${name}” อยู่แล้วที่ ${dup.loc} — ใช้ ADD เพื่อเพิ่มจำนวนแทน` };
       items.push({
-        id: Date.now(),
+        id: Math.max(0, ...items.map((i) => i.id)) + 1,
         name,
         kind: msg.kind,
         qty: 0,
         loc: "",
         owner,
         date: TODAY_ISO,
-        exp: null,
+        exp: undefined,
         min: 1,
         target: 2,
       });
       return { snapshot: { items, locations, history }, result: {} };
     }
     case "delItem": {
+      if (!items.some((i) => i.id === msg.id)) return { error: "ไม่พบรายการ" };
       return {
         snapshot: { items: items.filter((i) => i.id !== msg.id), locations, history },
         result: {},
       };
     }
     case "setItemField": {
+      if (!items.some((i) => i.id === msg.id)) return { error: "ไม่พบรายการ" };
       const next = items.map((i) =>
         i.id === msg.id
           ? {
@@ -122,6 +124,7 @@ export function applyMutation(snap: Snapshot, msg: Msg, owner: string): Mutation
     }
     case "setPlaceCode": {
       const newCode = msg.newCode.trim().toUpperCase();
+      if (!newCode) return { error: "รหัส location ห้ามว่าง" };
       if (locations.some((l) => l.code === newCode && l.code !== msg.code))
         return { error: `⚠ รหัส ${newCode} ถูกใช้แล้ว — ต้องไม่ซ้ำ` };
       const nextLocs = locations.map((l) =>
@@ -138,5 +141,9 @@ export function applyMutation(snap: Snapshot, msg: Msg, owner: string): Mutation
         result: {},
       };
     }
+    default:
+      // Belt-and-braces: the union above is exhaustive, but a hand-rolled HTTP
+      // body can still carry an unknown `type` — that is a 400, not a crash.
+      return { error: "unknown mutation" };
   }
 }

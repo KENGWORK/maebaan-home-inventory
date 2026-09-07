@@ -9,6 +9,10 @@ export async function runMutation(
   const current = await readState(c);
   const res = applyMutation(current, msg, owner);
   if ("error" in res) return res;
-  await writeSnapshot(c, current, res.snapshot);
+  // Reducers unshift new audit rows onto the FRONT of history (newest-first),
+  // so the delta is the head of the array; the sheet wants chronological ascending.
+  const delta = res.snapshot.history.length - current.history.length;
+  const newRows = delta > 0 ? res.snapshot.history.slice(0, delta) : [];
+  await writeSnapshot(c, res.snapshot, [...newRows].reverse());
   return res;
 }

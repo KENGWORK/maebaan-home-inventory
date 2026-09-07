@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyMutation, type Snapshot } from "./mutations";
+import { applyMutation, type Msg, type Snapshot } from "./mutations";
 import { freshHist, freshItems, freshLocs } from "./logic";
 
 const snap = (): Snapshot => ({ items: freshItems(), locations: freshLocs(), history: freshHist() });
@@ -74,6 +74,34 @@ describe("applyMutation", () => {
     expect(r.snapshot.items.every(i => i.loc !== "KIT-01")).toBe(true);
     const dup = applyMutation(snap(), { type: "setPlaceCode", code: "KIT-01", newCode: "KIT-02" }, "เก่ง");
     expect(dup).toEqual({ error: expect.any(String) });
+  });
+
+  // I6 — deterministic ids
+  it("newItem: id is max(existing) + 1 and is stable across identical calls", () => {
+    const maxId = Math.max(...snap().items.map((i) => i.id));
+    const a = applyMutation(snap(), { type: "newItem", name: "ถ่าน AA", kind: "supply" }, "เก่ง");
+    const b = applyMutation(snap(), { type: "newItem", name: "ถ่าน AA", kind: "supply" }, "เก่ง");
+    if ("error" in a || "error" in b) throw new Error("unexpected error");
+    expect(a.snapshot.items.find((i) => i.name === "ถ่าน AA")!.id).toBe(maxId + 1);
+    expect(b.snapshot.items.find((i) => i.name === "ถ่าน AA")!.id).toBe(maxId + 1);
+  });
+
+  // I6 — missing id is an error, not a silent no-op
+  it("delItem / setItemField: unknown id -> { error }", () => {
+    expect(applyMutation(snap(), { type: "delItem", id: 999999 }, "เก่ง")).toEqual({ error: expect.any(String) });
+    expect(applyMutation(snap(), { type: "setItemField", id: 999999, min: 3 }, "เก่ง")).toEqual({ error: expect.any(String) });
+  });
+
+  // C4 — a blank place code must be rejected
+  it("setPlaceCode: rejects a blank new code", () => {
+    expect(applyMutation(snap(), { type: "setPlaceCode", code: "KIT-01", newCode: "  " }, "เก่ง"))
+      .toEqual({ error: expect.any(String) });
+  });
+
+  // I3 — unknown mutation type is a validation error, not a crash
+  it("unknown mutation type -> { error }", () => {
+    expect(applyMutation(snap(), { type: "bogus" } as unknown as Msg, "เก่ง"))
+      .toEqual({ error: expect.any(String) });
   });
 
   it("delPlace: rejects while items with qty>0 remain, else removes", () => {

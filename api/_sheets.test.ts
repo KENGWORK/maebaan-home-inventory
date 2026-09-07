@@ -61,19 +61,38 @@ describe("readState / writeSnapshot", () => {
     expect((await readState(c)).items.length).toBe(SEED.items.length);
   });
 
-  it("writeSnapshot rewrites items/locations and appends only new history", async () => {
+  it("writeSnapshot rewrites items/locations, clears the surplus tail and appends the given history", async () => {
     const c = fakeClient();
     await ensureSeeded(c);
     const prev = await readState(c);
     const next = {
       ...prev,
-      items: prev.items.map((i) => (i.name === "ทิชชู่" ? { ...i, qty: 0 } : i)),
-      history: [{ date: "2026-09-06 09:12", evt: "USE" as const, name: "ทิชชู่", qty: 1, to: "BAT-01", who: "omo" }, ...prev.history],
+      // one FEWER item -> the trailing row must be cleared, not left behind
+      items: prev.items
+        .filter((i) => i.name !== "powerbank")
+        .map((i) => (i.name === "ทิชชู่" ? { ...i, qty: 0 } : i)),
+      locations: prev.locations.filter((l) => l.code !== "GAR-02"),
     };
-    await writeSnapshot(c, prev, next);
+    const appended = [
+      { date: "2026-09-06 09:12", evt: "USE" as const, name: "ทิชชู่", qty: 1, to: "BAT-01", who: "omo" },
+    ];
+    await writeSnapshot(c, next, appended);
     const after = await readState(c);
+    expect(after.items.length).toBe(prev.items.length - 1);
+    expect(after.items.some((i) => i.name === "powerbank")).toBe(false);
+    expect(after.locations.length).toBe(prev.locations.length - 1);
     expect(after.items.find((i) => i.name === "ทิชชู่")!.qty).toBe(0);
     expect(after.history[0]).toMatchObject({ evt: "USE", name: "ทิชชู่" });
     expect(after.history.length).toBe(prev.history.length + 1);
+  });
+
+  it("writeSnapshot appends duplicate history rows verbatim (no content dedup)", async () => {
+    const c = fakeClient();
+    await ensureSeeded(c);
+    const prev = await readState(c);
+    const row = { date: "2026-09-06 09:12", evt: "USE" as const, name: "ทิชชู่", qty: 1, to: "BAT-01", who: "omo" };
+    await writeSnapshot(c, prev, [row]);
+    await writeSnapshot(c, prev, [row]);
+    expect((await readState(c)).history.length).toBe(prev.history.length + 2);
   });
 });

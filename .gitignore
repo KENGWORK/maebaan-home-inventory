@@ -4,3 +4,8 @@ dist
 .DS_Store
 
 .impeccable/
+
+.env
+.env.*
+!.env.example
+.vercel

@@ -140,6 +140,49 @@ describe("applyMove", () => {
   });
 });
 
+describe("id assignment (I6)", () => {
+  it("applyAdd gives a new item max(existing id) + 1, stable across identical calls", () => {
+    const maxId = Math.max(...freshItems().map((i) => i.id));
+    const run = () =>
+      applyAdd(
+        freshItems(),
+        freshHist(),
+        [{ name: "โยเกิร์ต", kind: "food", qty: 2, loc: "KIT-01", expMode: "days", expVal: "7" }],
+        "เก่ง",
+      );
+    const a = run();
+    const b = run();
+    if ("error" in a || "error" in b) throw new Error("unexpected error");
+    expect(a.items.find((i) => i.name === "โยเกิร์ต")!.id).toBe(maxId + 1);
+    expect(b.items.find((i) => i.name === "โยเกิร์ต")!.id).toBe(maxId + 1);
+  });
+
+  it("applyAdd numbers several new items consecutively", () => {
+    const maxId = Math.max(...freshItems().map((i) => i.id));
+    const res = applyAdd(
+      freshItems(),
+      freshHist(),
+      [
+        { name: "โยเกิร์ต", kind: "food", qty: 1, loc: "KIT-01", expMode: "days", expVal: "" },
+        { name: "ถ่าน AA", kind: "supply", qty: 1, loc: "KIT-01", expMode: "days", expVal: "" },
+      ],
+      "เก่ง",
+    );
+    if ("error" in res) throw new Error(res.error);
+    expect(res.items.find((i) => i.name === "โยเกิร์ต")!.id).toBe(maxId + 1);
+    expect(res.items.find((i) => i.name === "ถ่าน AA")!.id).toBe(maxId + 2);
+  });
+
+  it("applyMove gives the new destination row max(existing id) + 1", () => {
+    const items = freshItems();
+    const maxId = Math.max(...items.map((i) => i.id));
+    const fever = items.find((i) => i.name === "ยาลดไข้")!;
+    const res = applyMove(items, freshHist(), [{ itemId: fever.id, qty: 3, to: "KIT-02" }], "เก่ง");
+    if ("error" in res) throw new Error(res.error);
+    expect(res.items.find((i) => i.name === "ยาลดไข้" && i.loc === "KIT-02")!.id).toBe(maxId + 1);
+  });
+});
+
 describe("applyUse", () => {
   it("decrements stock and reports what is left", () => {
     const items = freshItems();

@@ -113,6 +113,9 @@ export const TONE: Record<string, Tone> = {
 export const NOW_STAMP = "2026-09-06 09:12";
 export const TODAY_ISO = "2026-09-06";
 
+/** Real wall-clock stamp for audit rows: "YYYY-MM-DD HH:MM:SS". */
+export const nowStamp = () => new Date().toISOString().slice(0, 19).replace("T", " ");
+
 export const SEED = {
   items: ITEMS.map((i) => ({ ...i })),
   locations: LOCS.map((l) => ({ ...l })),
