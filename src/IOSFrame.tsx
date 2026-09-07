@@ -3,11 +3,43 @@ import { useEffect, useState, type ReactNode } from "react";
 const DW = 440;
 const DH = 956;
 
-/**
- * Stand-in for the design's imported ios-frame.jsx: a fixed 440x956 iPhone shell
- * with a dynamic island and home indicator, scaled down to fit small viewports.
- */
+/** Full-bleed on a phone or an installed (standalone) app; a scaled iPhone shell on wider screens. */
+function pickMode(): "full" | "framed" {
+  if (typeof window === "undefined") return "framed";
+  const standalone =
+    window.matchMedia?.("(display-mode: standalone)").matches ||
+    // iOS Safari
+    (navigator as unknown as { standalone?: boolean }).standalone === true;
+  if (standalone) return "full";
+  return window.innerWidth <= 700 ? "full" : "framed";
+}
+
 export function IOSFrame({ children }: { children: ReactNode }) {
+  const [mode, setMode] = useState<"full" | "framed">(pickMode);
+
+  useEffect(() => {
+    const on = () => setMode(pickMode());
+    on();
+    window.addEventListener("resize", on);
+    const mq = window.matchMedia?.("(display-mode: standalone)");
+    mq?.addEventListener?.("change", on);
+    return () => {
+      window.removeEventListener("resize", on);
+      mq?.removeEventListener?.("change", on);
+    };
+  }, []);
+
+  if (mode === "full") {
+    return (
+      <div style={{ width: "100vw", height: "100dvh", overflow: "hidden", background: "#EFE7F8" }}>
+        {children}
+      </div>
+    );
+  }
+  return <FramedDevice>{children}</FramedDevice>;
+}
+
+function FramedDevice({ children }: { children: ReactNode }) {
   const [scale, setScale] = useState(1);
 
   useEffect(() => {

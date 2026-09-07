@@ -1,0 +1,15 @@
+{
+  "name": "แม่บ้าน Maebaan",
+  "short_name": "แม่บ้าน",
+  "description": "จัดการของในบ้าน · เก็บ ย้าย ใช้ ของ",
+  "lang": "th",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EFE7F8",
+  "theme_color": "#EFE7F8",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
