@@ -2,3 +2,10 @@ node_modules
 dist
 *.tsbuildinfo
 .DS_Store
+
+.impeccable/
+
+.env
+.env.*
+!.env.example
+.vercel

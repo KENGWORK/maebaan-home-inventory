@@ -35,6 +35,7 @@ src/api.ts              NEW  client: fetchState(), mutate(); Snapshot type
 src/App.tsx             MOD  mount-fetch, optimistic mutate + reconcile, loading/offline UI
 src/data.ts             MOD  export SEED snapshot helper for /api/init
 api/_sheets.ts          NEW  SheetsClient iface + JWT impl, row<->object mappers, readState/writeSnapshot/ensureTabs
+api/_fakeClient.ts      NEW  shared in-memory SheetsClient for tests
 api/_sheets.test.ts     NEW  mapper round-trips + readState/writeSnapshot against a fake client
 api/_run.ts             NEW  runMutation(client, msg): reads, dispatches, writes, returns snapshot+result
 api/_run.test.ts        NEW  runMutation against a fake in-memory client
@@ -497,8 +498,10 @@ describe("mappers", () => {
       ["9","กระเป๋าตัง","supply","1","MAS-01","omo","2026-09-05","", "1","1","TRUE"],
     ];
     const out = rowsToItems(rows);
-    expect(out[0]).toMatchObject({ id: 5, qty: 8, min: 4, target: 10, exp: "2026-09-09", noStock: undefined });
-    expect(out[1]).toMatchObject({ id: 9, exp: null, noStock: true });
+    expect(out[0]).toMatchObject({ id: 5, qty: 8, min: 4, target: 10, exp: "2026-09-09" });
+    expect(out[0].noStock).toBeUndefined();
+    expect(out[1]).toMatchObject({ id: 9, noStock: true });
+    expect(out[1].exp).toBeUndefined();
   });
 
   it("locations round-trip and rebuild label", () => {
@@ -552,7 +555,7 @@ export function rowsToItems(rows: string[][]): Item[] {
     loc: r[4] ?? "",
     owner: r[5] ?? "",
     date: r[6] ?? "",
-    exp: r[7] ? r[7] : null,
+    exp: r[7] ? r[7] : undefined,
     min: Number(r[8] ?? 0),
     target: Number(r[9] ?? 1),
     noStock: (r[10] ?? "").toUpperCase() === "TRUE" ? true : undefined,
@@ -603,8 +606,9 @@ git commit -m "feat: Sheet row<->object mappers"
 **Files:**
 - Modify: `api/_sheets.ts` (add client + IO functions)
 - Modify: `api/_sheets.test.ts` (add IO tests with a fake client)
+- Create: `api/_fakeClient.ts` (shared in-memory `SheetsClient` for tests)
 - Modify: `package.json` (dep `google-auth-library`)
-- Create: `src/data.ts` export `SEED` (Task also touches `src/data.ts`)
+- Modify: `src/data.ts` (export `SEED`)
 
 **Interfaces:**
 - Consumes: `GOOGLE_SERVICE_ACCOUNT_JSON`, `SHEET_ID` from `process.env`; mappers from Task 3; `SEED` from `src/data.ts`.
@@ -645,14 +649,15 @@ export const SEED = {
 npm i google-auth-library@^9
 ```
 
-- [ ] **Step 3: Write the failing tests**
+- [ ] **Step 3a: Create the shared fake client**
 
 ```ts
-// append to api/_sheets.test.ts
-import { readState, writeSnapshot, ensureSeeded, type SheetsClient } from "./_sheets";
-import { SEED } from "../src/data";
+// api/_fakeClient.ts — in-memory SheetsClient for tests
+import type { SheetsClient } from "./_sheets";
 
-function fakeClient(initial: Record<string, string[][]> = {}): SheetsClient & { tabs: Record<string, string[][]> } {
+export function fakeClient(
+  initial: Record<string, string[][]> = {},
+): SheetsClient & { tabs: Record<string, string[][]> } {
   const tabs: Record<string, string[][]> = JSON.parse(JSON.stringify(initial));
   return {
     tabs,
@@ -668,6 +673,15 @@ function fakeClient(initial: Record<string, string[][]> = {}): SheetsClient & { 
     async addTabs(names) { for (const n of names) tabs[n] ||= []; },
   };
 }
+```
+
+- [ ] **Step 3: Write the failing tests**
+
+```ts
+// append to api/_sheets.test.ts
+import { readState, writeSnapshot, ensureSeeded } from "./_sheets";
+import { fakeClient } from "./_fakeClient";
+import { SEED } from "../src/data";
 
 describe("readState / writeSnapshot", () => {
   it("ensureSeeded creates tabs and seeds when empty", async () => {
@@ -831,7 +845,7 @@ Expected: green.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add api/_sheets.ts api/_sheets.test.ts src/data.ts package.json package-lock.json
+git add api/_sheets.ts api/_sheets.test.ts api/_fakeClient.ts src/data.ts package.json package-lock.json
 git commit -m "feat: Sheets client, readState/writeSnapshot/ensureSeeded"
 ```
 
@@ -846,7 +860,7 @@ git commit -m "feat: Sheets client, readState/writeSnapshot/ensureSeeded"
 - Modify: `package.json` (devDep `@vercel/node`, script `vercel-dev`)
 
 **Interfaces:**
-- Consumes: `SheetsClient`, `realClient`, `readState`, `writeSnapshot`, `ensureSeeded` from `api/_sheets.ts`; `applyMutation`, `Msg`, `Snapshot` from `src/mutations.ts`.
+- Consumes: `SheetsClient`, `realClient`, `readState`, `writeSnapshot`, `ensureSeeded` from `api/_sheets.ts`; `fakeClient` from `api/_fakeClient.ts`; `applyMutation`, `Msg`, `Snapshot` from `src/mutations.ts`.
 - Produces:
   ```ts
   // api/_run.ts
@@ -872,22 +886,9 @@ npm i -D @vercel/node@^3
 ```ts
 // api/_run.test.ts
 import { describe, expect, it } from "vitest";
-import { ensureSeeded, readState, type SheetsClient } from "./_sheets";
+import { ensureSeeded, readState } from "./_sheets";
+import { fakeClient } from "./_fakeClient";
 import { runMutation } from "./_run";
-
-// reuse fakeClient from _sheets.test.ts by copying it here (small, avoids shared test util)
-function fakeClient(): SheetsClient & { tabs: Record<string, string[][]> } {
-  const tabs: Record<string, string[][]> = {};
-  return {
-    tabs,
-    async batchGet(ranges) { const o: Record<string, string[][]> = {}; for (const r of ranges) o[r] = tabs[r] ?? []; return o; },
-    async updateRange(range, values) { tabs[range.split("!")[0]] = values.map((r) => r.slice()); },
-    async clearRange(range) { const t = range.split("!")[0]; tabs[t] = (tabs[t] ?? []).slice(0, 1); },
-    async append(range, values) { const t = range.split("!")[0]; (tabs[t] ||= []).push(...values.map((r) => r.slice())); },
-    async listTabs() { return Object.keys(tabs); },
-    async addTabs(names) { for (const n of names) tabs[n] ||= []; },
-  };
-}
 
 describe("runMutation", () => {
   it("USE persists to the fake sheet and returns result", async () => {

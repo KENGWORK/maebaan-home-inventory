@@ -110,5 +110,46 @@ export const TONE: Record<string, Tone> = {
   mint: { f: "hue-rotate(112deg) saturate(.88)", label: "มินต์เย็น", sw: "linear-gradient(145deg,#4FC0A8,#2E8F86)" },
 };
 
-export const NOW_STAMP = "2026-09-06 09:12";
 export const TODAY_ISO = "2026-09-06";
+
+// A `toLocaleString("sv-SE")` one-liner is only ISO-shaped when the runtime
+// actually ships the sv-SE locale — a small-ICU build silently falls back to
+// en-US and yields "9/7/2026, 2:23:45 PM". Build the string from
+// `formatToParts` instead: the explicit `2-digit`/`numeric` options are the
+// guarantee, so the locale tag barely matters.
+const BKK = { timeZone: "Asia/Bangkok" } as const;
+
+const parts = (d: Date): Record<string, string> =>
+  Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      ...BKK,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    })
+      .formatToParts(d)
+      .map((x) => [x.type, x.value]),
+  ) as Record<string, string>;
+
+/** Real Asia/Bangkok wall-clock stamp for audit rows: "YYYY-MM-DD HH:MM:SS". */
+export const nowStamp = () => {
+  const p = parts(new Date());
+  // Some engines emit hour "24" for midnight under hour12:false.
+  return `${p.year}-${p.month}-${p.day} ${p.hour === "24" ? "00" : p.hour}:${p.minute}:${p.second}`;
+};
+
+/** Real Asia/Bangkok date "YYYY-MM-DD", `daysAgo` days before now (default today). */
+export const localDateISO = (daysAgo = 0) => {
+  const p = parts(new Date(Date.now() - daysAgo * 86_400_000));
+  return `${p.year}-${p.month}-${p.day}`;
+};
+
+export const SEED = {
+  items: ITEMS.map((i) => ({ ...i })),
+  locations: LOCS.map((l) => ({ ...l })),
+  history: HIST.slice(),
+};

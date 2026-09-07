@@ -1,10 +1,15 @@
-import { useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type ReactNode } from "react";
-import { PENDING, TODAY, TODAY_ISO, TONE } from "./data";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { localDateISO, PENDING, TODAY, TONE } from "./data";
 import type { Hist, Item, Kind, Loc } from "./data";
 import {
-  applyAdd,
-  applyMove,
-  applyUse,
   autoCode,
   days,
   freshHist,
@@ -16,6 +21,8 @@ import {
   locSug,
   shopRows,
 } from "./logic";
+import { applyMutation, type Msg, type Snapshot } from "./mutations";
+import { fetchState, mutate } from "./api";
 import { css } from "./css";
 import { IOSFrame } from "./IOSFrame";
 import { chip, codeBadge, DANGER, ghost, PRIM, pill, SEC, shot } from "./ui";
@@ -78,6 +85,12 @@ type Sheet =
   | { kind: "buy"; name: string };
 
 interface State {
+  loading: boolean;
+  /** True once `fetchState` has returned real server state. Until then the app is
+   *  running on the local seed and must NOT write to the server — the seed's
+   *  pinned ids have nothing to do with the live sheet's rows. */
+  hydrated: boolean;
+  online: boolean;
   tone: string | null;
   screen: Screen;
   locs: Loc[];
@@ -132,6 +145,9 @@ const freshMoveRow = (query = "", itemId: number | null = null): MoveRow => ({
 });
 
 const initial = (): State => ({
+  loading: true,
+  hydrated: false,
+  online: true,
   tone: null,
   screen: "home",
   locs: freshLocs(),
@@ -164,8 +180,8 @@ const initial = (): State => ({
   histMode: "item",
   histQuery: "",
   histLoc: "",
-  histFrom: "2026-08-30",
-  histTo: "2026-09-06",
+  histFrom: localDateISO(7),
+  histTo: localDateISO(0),
 });
 
 const st = (decl: string): CSSProperties => css(decl);
@@ -186,6 +202,12 @@ const HEAD: Record<Screen, [string, string]> = {
 export function App() {
   const [s, setS] = useState<State>(initial);
   const toastTimer = useRef<ReturnType<typeof setTimeout>>();
+  // Kept in sync every render so debounced closures never fire with a stale owner.
+  const ownerRef = useRef(s.owner);
+  ownerRef.current = s.owner;
+  // Same reason: the debounce timer fires long after the render that scheduled it.
+  const hydratedRef = useRef(s.hydrated);
+  hydratedRef.current = s.hydrated;
 
   const set = (patch: Partial<State>) => setS((prev) => ({ ...prev, ...patch }));
   const nav = (screen: Screen) => () => set({ screen, sheet: null });
@@ -193,6 +215,182 @@ export function App() {
     set({ toast: t });
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => set({ toast: "" }), 2600);
+  };
+
+  /**
+   * Attempt the server write — but only once we hold server-sourced state. A
+   * boot-offline client is running the local seed, whose pinned ids do not match
+   * any live sheet, so writing from it would corrupt real data; it stays a
+   * local-only demo session until reload. A success flips `online` back to true,
+   * so a client that *is* hydrated heals itself after a blip; a failure always
+   * rolls the optimistic change back, since `hydrated` makes that unambiguous.
+   */
+  const syncOrRollback = (msg: Msg, prev: Snapshot) => {
+    if (!s.hydrated) return;
+    mutate(msg, s.owner)
+      .then(({ snapshot }) =>
+        set({
+          items: snapshot.items,
+          locs: snapshot.locations,
+          hist: snapshot.history,
+          online: true,
+        }),
+      )
+      .catch((e) => {
+        set({ items: prev.items, locs: prev.locations, hist: prev.history, online: false });
+        flash(`บันทึกไม่สำเร็จ · ${(e as Error).message}`);
+      });
+  };
+
+  const dispatch = (msg: Msg, toastFor?: (r: Record<string, unknown>) => string) => {
+    const prev: Snapshot = { items: s.items, locations: s.locs, history: s.hist };
+    const local = applyMutation(prev, msg, s.owner);
+    if ("error" in local) {
+      flash(local.error);
+      return false;
+    }
+    set({
+      items: local.snapshot.items,
+      locs: local.snapshot.locations,
+      hist: local.snapshot.history,
+    });
+    if (toastFor) flash(toastFor(local.result));
+    syncOrRollback(msg, prev);
+    return true;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchState()
+      .then((snap) => {
+        if (!cancelled)
+          set({
+            items: snap.items,
+            locs: snap.locations,
+            hist: snap.history,
+            loading: false,
+            hydrated: true,
+          });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          set({ loading: false, online: false });
+          flash("ออฟไลน์ · ใช้ข้อมูลตัวอย่าง");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── keyed mutate debounce ──────────────────────────────────────────────────
+  // One in-flight patch per key: the optimistic apply lands immediately so the
+  // input/stepper stays responsive, while the server write is coalesced. Keys are
+  // per-field (item-<id>-min vs item-<id>-target) so sibling edits never clobber.
+  const pendingPatch = useRef<Record<string, Msg>>({});
+  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // A code edit renames the row's own key, so remember which code the SERVER still
+  // knows for a row mid-retype — otherwise the coalesced write would carry an
+  // intermediate code the server never saw, and the debounce key would change on
+  // every keystroke (defeating the debounce entirely).
+  const placeOrigin = useRef<Record<string, string>>({});
+  useEffect(
+    () => () => {
+      Object.values(debounceTimers.current).forEach(clearTimeout);
+    },
+    [],
+  );
+
+  /**
+   * `serverMsg` is what the coalesced write sends; `localMsg` is what we apply
+   * optimistically. They differ whenever a keystroke changes the row's own
+   * identity: a place-code edit renames GAR-01 → GAR-0 → GAR-0X locally one
+   * keystroke at a time, while the server — which still knows the row as
+   * GAR-01 — must receive the single NET rename GAR-01 → GAR-0X. Sending the
+   * incremental message instead would 400 on a code the server never saw.
+   */
+  const debouncedMutate = (key: string, serverMsg: Msg, localMsg: Msg = serverMsg): boolean => {
+    const probe = applyMutation(
+      { items: s.items, locations: s.locs, history: s.hist },
+      localMsg,
+      s.owner,
+    );
+    if ("error" in probe) {
+      flash(probe.error);
+      return false;
+    }
+    // Functional update: rapid clicks compose instead of racing a stale snapshot.
+    setS((prev) => {
+      const r = applyMutation(
+        { items: prev.items, locations: prev.locs, history: prev.hist },
+        localMsg,
+        prev.owner,
+      );
+      if ("error" in r) return prev;
+      return { ...prev, items: r.snapshot.items, locs: r.snapshot.locations, hist: r.snapshot.history };
+    });
+    // A non-hydrated client is a local-only demo session: the optimistic apply
+    // above still lands so the UI works, but nothing goes to the server.
+    if (!s.hydrated) return true;
+    pendingPatch.current[key] = serverMsg; // latest message per key wins
+    clearTimeout(debounceTimers.current[key]);
+    const wasOnline = s.online;
+    debounceTimers.current[key] = setTimeout(() => {
+      if (!hydratedRef.current) return;
+      const m = pendingPatch.current[key];
+      delete pendingPatch.current[key];
+      mutate(m, ownerRef.current)
+        .then(({ snapshot }) => {
+          // The server now knows the row under its new code.
+          if (m.type === "setPlaceCode") delete placeOrigin.current[m.newCode.trim().toUpperCase()];
+          set({
+            items: snapshot.items,
+            locs: snapshot.locations,
+            hist: snapshot.history,
+            online: true,
+          });
+        })
+        .catch((e) => {
+          // Known minor: the optimistic apply stands. A debounced field edit has
+          // coalesced away its "before" by this point, so it reverts on reload.
+          set({ online: false });
+          if (wasOnline) flash(`บันทึกไม่สำเร็จ · ${(e as Error).message}`);
+        });
+    }, 600);
+    return true;
+  };
+
+  const setItemFieldDebounced = (id: number, patch: { min?: number; target?: number }) => {
+    const field = patch.min !== undefined ? "min" : "target";
+    debouncedMutate(`item-${id}-${field}`, { type: "setItemField", id, ...patch });
+  };
+
+  const renamePlaceDebounced = (code: string, fields: { name?: string; room?: string }) => {
+    const field = fields.name !== undefined ? "name" : "room";
+    debouncedMutate(`place-${code}-${field}`, {
+      type: "renamePlace",
+      code,
+      name: fields.name,
+      room: fields.room,
+    });
+  };
+
+  /**
+   * `cur` is the row's code in current (already-optimistically-renamed) state;
+   * `raw` is what the user has now typed. The row's identity as far as the SERVER
+   * is concerned is still `origin` — the code it had when this edit began — so we
+   * carry that forward under each new code the row takes, keeping both the
+   * debounce key and the server message stable across keystrokes.
+   */
+  const setPlaceCodeDebounced = (cur: string, raw: string) => {
+    const origin = placeOrigin.current[cur] ?? cur;
+    // Remember the origin under the NEW code so the next keystroke still knows it.
+    placeOrigin.current[raw] = origin;
+    debouncedMutate(
+      `place-${origin}-code`, // stable: origin never changes mid-edit
+      { type: "setPlaceCode", code: origin, newCode: raw }, // server: net rename
+      { type: "setPlaceCode", code: cur, newCode: raw }, // local: incremental
+    );
   };
 
   const tone = TONE[s.tone || "lilac"] || TONE.lilac;
@@ -235,43 +433,60 @@ export function App() {
   };
 
   const addSave = () => {
-    const res = applyAdd(s.items, s.hist, s.addRows, s.owner);
+    const prev: Snapshot = { items: s.items, locations: s.locs, history: s.hist };
+    const msg: Msg = { type: "add", addRows: s.addRows };
+    const res = applyMutation(prev, msg, s.owner);
     if ("error" in res) return flash(res.error);
     set({
-      items: res.items,
-      hist: res.hist,
+      items: res.snapshot.items,
+      locs: res.snapshot.locations,
+      hist: res.snapshot.history,
       screen: "inv",
       invMode: "item",
       invQuery: "",
       invLoc: null,
       addRows: [freshAddRow()],
     });
-    flash(`บันทึกเก็บของ ${res.added} รายการ โดย ${s.owner}`);
+    flash(`บันทึกเก็บของ ${res.result.added} รายการ โดย ${s.owner}`);
+    syncOrRollback(msg, prev);
   };
   const moveSave = () => {
-    const res = applyMove(
-      s.items,
-      s.hist,
-      s.moveRows.map((r) => ({ itemId: r.itemId, qty: r.qty, to: r.to })),
-      s.owner,
-    );
+    const prev: Snapshot = { items: s.items, locations: s.locs, history: s.hist };
+    const msg: Msg = {
+      type: "move",
+      moveRows: s.moveRows.map((r) => ({ itemId: r.itemId, qty: r.qty, to: r.to })),
+    };
+    const res = applyMutation(prev, msg, s.owner);
     if ("error" in res) return flash(res.error);
     set({
-      items: res.items,
-      hist: res.hist,
+      items: res.snapshot.items,
+      locs: res.snapshot.locations,
+      hist: res.snapshot.history,
       screen: "inv",
       invMode: "loc",
-      invLoc: res.firstTo,
+      invLoc: (res.result.firstTo as string) ?? null,
       moveRows: [freshMoveRow()],
     });
-    flash(`ย้าย ${res.moved} รายการ โดย ${s.owner}`);
+    flash(`ย้าย ${res.result.moved} รายการ โดย ${s.owner}`);
+    syncOrRollback(msg, prev);
   };
   const useSave = () => {
-    const res = applyUse(s.items, s.hist, s.useId, s.useQty, s.owner);
+    const prev: Snapshot = { items: s.items, locations: s.locs, history: s.hist };
+    const msg: Msg = { type: "use", useId: s.useId, useQty: s.useQty };
+    const res = applyMutation(prev, msg, s.owner);
     if ("error" in res) return flash(res.error);
-    set({ items: res.items, hist: res.hist, useId: null, useQuery: "", useQty: 1 });
-    if (res.left <= 0) flash(`⚠ ${res.name} หมดแล้ว — เพิ่มเข้ารายการซื้ออัตโนมัติ`);
-    else flash(`ใช้ ${res.name} ${res.used} หน่วย · เหลือ ${res.left}`);
+    set({
+      items: res.snapshot.items,
+      locs: res.snapshot.locations,
+      hist: res.snapshot.history,
+      useId: null,
+      useQuery: "",
+      useQty: 1,
+    });
+    const left = res.result.left as number;
+    if (left <= 0) flash(`⚠ ${res.result.name} หมดแล้ว — เพิ่มเข้ารายการซื้ออัตโนมัติ`);
+    else flash(`ใช้ ${res.result.name} ${res.result.used} หน่วย · เหลือ ${left}`);
+    syncOrRollback(msg, prev);
   };
 
   // ── derived ────────────────────────────────────────────────────────────────
@@ -282,6 +497,10 @@ export function App() {
     set,
     flash,
     nav,
+    dispatch,
+    setItemFieldDebounced,
+    renamePlaceDebounced,
+    setPlaceCodeDebounced,
     onAddSave: addSave,
     onMoveSave: moveSave,
     onUseSave: useSave,
@@ -306,23 +525,49 @@ export function App() {
               </div>
               <div style={st("font:400 12.5px/1.45 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:2px")}>{h[1]}</div>
             </div>
-            <button onClick={nav("set")} style={st("width:46px;height:46px;flex:none;border:none;border-radius:16px;background:#F8F3FD;box-shadow:6px 7px 16px rgba(120,95,175,.2),-5px -6px 14px #ffffff,inset 1px 1px 3px #ffffff;cursor:pointer;display:grid;place-items:center")}>
-              <GearIcon />
-            </button>
+            <div style={st("display:flex;align-items:center;gap:8px;flex:none")}>
+              {/* Never hydrated → local-only seed session; hydrated but a write
+                  failed → offline. `online` is meaningless before hydration. */}
+              {!s.loading && !s.hydrated && (
+                <div style={st("font:500 10px 'IBM Plex Mono',monospace;color:#9A90BC;background:#F1ECFA;border-radius:8px;padding:4px 8px")}>
+                  ตัวอย่าง
+                </div>
+              )}
+              {s.hydrated && !s.online && (
+                <div style={st("font:500 10px 'IBM Plex Mono',monospace;color:#9A90BC;background:#F1ECFA;border-radius:8px;padding:4px 8px")}>
+                  ออฟไลน์
+                </div>
+              )}
+              <button onClick={nav("set")} style={st("width:46px;height:46px;flex:none;border:none;border-radius:16px;background:#F8F3FD;box-shadow:6px 7px 16px rgba(120,95,175,.2),-5px -6px 14px #ffffff,inset 1px 1px 3px #ffffff;cursor:pointer;display:grid;place-items:center")}>
+                <GearIcon />
+              </button>
+            </div>
           </div>
 
           {/* scroll area */}
           <div style={st("flex:1;overflow-y:auto;padding:8px 22px 140px")}>
-            {s.screen === "home" && <HomeScreen v={v} />}
-            {s.screen === "pending" && <PendingScreen v={v} />}
-            {s.screen === "cam" && <CamScreen v={v} />}
-            {s.screen === "add" && <AddScreen v={v} />}
-            {s.screen === "move" && <MoveScreen v={v} />}
-            {s.screen === "use" && <UseScreen v={v} />}
-            {s.screen === "inv" && <InvScreen v={v} />}
-            {s.screen === "hist" && <HistScreen v={v} />}
-            {s.screen === "shop" && <ShopScreen v={v} />}
-            {s.screen === "set" && <SetScreen v={v} />}
+            {s.loading ? (
+              <div style={st("display:grid;place-items:center;height:60vh")}>
+                <div
+                  style={st(
+                    "width:34px;height:34px;border-radius:50%;border:3px solid #C6B9E6;border-top-color:#6A57D6;animation:spin .8s linear infinite",
+                  )}
+                />
+              </div>
+            ) : (
+              <>
+                {s.screen === "home" && <HomeScreen v={v} />}
+                {s.screen === "pending" && <PendingScreen v={v} />}
+                {s.screen === "cam" && <CamScreen v={v} />}
+                {s.screen === "add" && <AddScreen v={v} />}
+                {s.screen === "move" && <MoveScreen v={v} />}
+                {s.screen === "use" && <UseScreen v={v} />}
+                {s.screen === "inv" && <InvScreen v={v} />}
+                {s.screen === "hist" && <HistScreen v={v} />}
+                {s.screen === "shop" && <ShopScreen v={v} />}
+                {s.screen === "set" && <SetScreen v={v} />}
+              </>
+            )}
           </div>
 
           {/* bottom nav */}
@@ -366,6 +611,10 @@ type Helpers = {
   set: (patch: Partial<State>) => void;
   flash: (t: string) => void;
   nav: (screen: Screen) => () => void;
+  dispatch: (msg: Msg, toastFor?: (r: Record<string, unknown>) => string) => boolean;
+  setItemFieldDebounced: (id: number, patch: { min?: number; target?: number }) => void;
+  renamePlaceDebounced: (code: string, fields: { name?: string; room?: string }) => void;
+  setPlaceCodeDebounced: (code: string, newCode: string) => void;
   onAddSave: () => void;
   onMoveSave: () => void;
   onUseSave: () => void;
@@ -379,7 +628,11 @@ function build(
   item: (id: number | null) => Item | undefined,
   H: Helpers,
 ) {
-  const { set, flash, nav, onAddSave, onMoveSave, onUseSave } = H;
+  const {
+    set, flash, nav, dispatch,
+    setItemFieldDebounced, renamePlaceDebounced, setPlaceCodeDebounced,
+    onAddSave, onMoveSave, onUseSave,
+  } = H;
   const items = s.items;
   const screen = s.screen;
   const d = homeDerived(items, TODAY);
@@ -700,13 +953,7 @@ function build(
     .filter((i) => !sq || (i.name + i.loc).toLowerCase().includes(sq))
     .map((i) => {
       const patch = (k: "min" | "target", vv: number) =>
-        set({
-          items: s.items.map((x) =>
-            x.id === i.id
-              ? { ...x, min: k === "min" ? vv : x.min, target: k === "target" ? vv : x.target }
-              : x,
-          ),
-        });
+        setItemFieldDebounced(i.id, k === "min" ? { min: vv } : { target: vv });
       return {
         key: i.id,
         name: i.name,
@@ -715,8 +962,7 @@ function build(
         codeStyle: codeBadge(true),
         kindLabel: i.kind === "food" ? "ของกิน" : "ของใช้",
         del: () => set({ sheet: { kind: "delItem", id: i.id, name: i.name }, sheetText: "" }),
-        toggleTrack: () =>
-          set({ items: s.items.map((x) => (x.id === i.id ? { ...x, noStock: !x.noStock } : x)) }),
+        toggleTrack: () => dispatch({ type: "setItemField", id: i.id, noStock: !i.noStock }),
         trackLabel: i.noStock ? "ไม่นับสต็อก (ของคงทน)" : "นับสต็อก · ตั้งขั้นต่ำได้",
         trackStyle:
           "border:none;cursor:pointer;text-align:left;border-radius:13px;padding:8px 10px;font:500 10.5px Mitr,sans-serif;" +
@@ -736,40 +982,25 @@ function build(
   const pq = s.placeQuery.trim().toLowerCase();
   const placeRows = s.locs
     .filter((l) => !pq || (l.name + l.room + l.code).toLowerCase().includes(pq))
-    .map((l) => {
-      const patch = (fields: Partial<Loc>) =>
-        set({
-          locs: s.locs.map((x) =>
-            x.code === l.code
-              ? {
-                  ...x,
-                  ...fields,
-                  label: `${fields.code || x.code} · ${fields.room || x.room} – ${fields.name || x.name}`,
-                }
-              : x,
-          ),
-        });
+    .map((l, idx) => {
       return {
-        key: l.code,
+        // Position, NOT `l.code`: a code edit rewrites `l.code` on every
+        // keystroke, and a changing key remounts the row — which blurs the input
+        // the user is typing into, so every character after the first is lost.
+        // The list neither reorders nor changes length mid-edit, so the index is
+        // stable exactly when it needs to be; the inputs are controlled, so a
+        // reused node across a filter change just takes the new values.
+        key: idx,
         code: l.code,
         name: l.name,
         room: l.room,
         itemCount: `${items.filter((i) => i.loc === l.code).length} items`,
-        setCode: (e: ChangeEvent<HTMLInputElement>) => {
-          const vv = e.target.value.toUpperCase();
-          if (s.locs.filter((x) => x.code === vv && x.code !== l.code).length) {
-            flash(`⚠ รหัส ${vv} ถูกใช้แล้ว — ต้องไม่ซ้ำ`);
-            return;
-          }
-          set({
-            locs: s.locs.map((x) =>
-              x.code === l.code ? { ...x, code: vv, label: `${vv} · ${x.room} – ${x.name}` } : x,
-            ),
-            items: s.items.map((i) => (i.loc === l.code ? { ...i, loc: vv } : i)),
-          });
-        },
-        setName: (e: ChangeEvent<HTMLInputElement>) => patch({ name: e.target.value }),
-        setRoom: (e: ChangeEvent<HTMLInputElement>) => patch({ room: e.target.value }),
+        setCode: (e: ChangeEvent<HTMLInputElement>) =>
+          setPlaceCodeDebounced(l.code, e.target.value.toUpperCase()),
+        setName: (e: ChangeEvent<HTMLInputElement>) =>
+          renamePlaceDebounced(l.code, { name: e.target.value }),
+        setRoom: (e: ChangeEvent<HTMLInputElement>) =>
+          renamePlaceDebounced(l.code, { room: e.target.value }),
         del: () => {
           if (items.filter((i) => i.loc === l.code && i.qty > 0).length) {
             flash(`ยังมีของอยู่ใน ${l.code} — ย้ายของออกก่อนลบ`);
@@ -845,29 +1076,8 @@ function build(
         style: PRIM,
         on: () => {
           const name = s.sheetText.trim();
-          if (!name) return flash("ใส่ชื่อของก่อน");
-          const dup = s.items.find((i) => i.name.trim().toLowerCase() === name.toLowerCase());
-          if (dup) return flash(`⚠ มี “${name}” อยู่แล้วที่ ${dup.loc} — ใช้ ADD เพื่อเพิ่มจำนวนแทน`);
-          set({
-            sheet: null,
-            sheetText: "",
-            items: [
-              ...s.items,
-              {
-                id: Date.now(),
-                name,
-                kind: s.newKind,
-                qty: 0,
-                loc: "",
-                owner: s.owner,
-                date: TODAY_ISO,
-                exp: null,
-                min: 1,
-                target: 2,
-              },
-            ],
-          });
-          flash(`เพิ่ม “${name}” เข้ารายการแล้ว`);
+          if (dispatch({ type: "newItem", name, kind: s.newKind }, () => `เพิ่ม “${name}” เข้ารายการแล้ว`))
+            set({ sheet: null, sheetText: "" });
         },
       },
       { label: "ยกเลิก", style: SEC, on: () => set({ sheet: null, sheetText: "" }) },
@@ -904,22 +1114,20 @@ function build(
         on: () => {
           const name = s.sheetText.trim();
           const code = (s.placeCode || autoCode(s.locs, room)).toUpperCase();
-          if (!room) return flash("ระบุ location หลักก่อน");
-          if (!name) return flash("ใส่ชื่อ location รองก่อน");
-          if (s.locs.filter((x) => x.code === code).length)
-            return flash(`⚠ รหัส ${code} ถูกใช้แล้ว — ต้องไม่ซ้ำ`);
-          if (s.locs.filter((x) => x.room === room && x.name === name).length)
-            return flash(`⚠ มี “${room} – ${name}” อยู่แล้ว`);
-          set({
-            sheet: null,
-            sheetText: "",
-            setTab: "places",
-            placeCode: "",
-            placeRoom: "",
-            placeRoomCustom: "",
-            locs: [...s.locs, { code, name, room, label: `${code} · ${room} – ${name}` }],
-          });
-          flash(`สร้าง ${code} · ${room} – ${name} แล้ว`);
+          if (
+            dispatch(
+              { type: "newPlace", code, name, room },
+              () => `สร้าง ${code} · ${room} – ${name} แล้ว`,
+            )
+          )
+            set({
+              sheet: null,
+              sheetText: "",
+              setTab: "places",
+              placeCode: "",
+              placeRoom: "",
+              placeRoomCustom: "",
+            });
         },
       },
       {
@@ -942,8 +1150,8 @@ function build(
         style: okP ? DANGER : SEC + ";opacity:.6",
         on: () => {
           if (!okP) return flash("ต้องพิมพ์ Delete เพื่อยืนยัน");
-          set({ sheet: null, sheetText: "", locs: s.locs.filter((x) => x.code !== sheet.code) });
-          flash(`ลบสถานที่ ${sheet.code} แล้ว`);
+          if (dispatch({ type: "delPlace", code: sheet.code }, () => `ลบสถานที่ ${sheet.code} แล้ว`))
+            set({ sheet: null, sheetText: "" });
         },
       },
       { label: "ยกเลิก", style: SEC, on: () => set({ sheet: null, sheetText: "" }) },
@@ -962,8 +1170,8 @@ function build(
         style: ok ? DANGER : SEC + ";opacity:.6",
         on: () => {
           if (!ok) return flash("ต้องพิมพ์ Delete เพื่อยืนยัน");
-          set({ sheet: null, sheetText: "", items: s.items.filter((i) => i.id !== sheet.id) });
-          flash(`ลบ “${sheet.name}” แล้ว`);
+          if (dispatch({ type: "delItem", id: sheet.id }, () => `ลบ “${sheet.name}” แล้ว`))
+            set({ sheet: null, sheetText: "" });
         },
       },
       { label: "ยกเลิก", style: SEC, on: () => set({ sheet: null, sheetText: "" }) },
@@ -1118,10 +1326,10 @@ function build(
     setHistTo: (e: ChangeEvent<HTMLInputElement>) => set({ histTo: e.target.value }),
     histRanges: (
       [
-        ["เมื่อวาน", "2026-09-05", "2026-09-05"],
-        ["สัปดาห์นี้", "2026-08-31", "2026-09-06"],
-        ["30 วัน", "2026-08-07", "2026-09-06"],
-      ] as const
+        ["เมื่อวาน", localDateISO(1), localDateISO(1)],
+        ["สัปดาห์นี้", localDateISO(6), localDateISO(0)],
+        ["30 วัน", localDateISO(30), localDateISO(0)],
+      ] as [string, string, string][]
     ).map((dr) => ({
       label: dr[0],
       style: chip(s.histFrom === dr[1] && s.histTo === dr[2], false),

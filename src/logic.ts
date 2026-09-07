@@ -1,8 +1,11 @@
 // Pure domain logic ported from design/Home Inventory.dc.html.
 // Everything here is side-effect free so it can be unit tested and reused by the UI.
 
-import { HIST, ITEMS, LOCS, NOW_STAMP, TODAY, TODAY_ISO } from "./data";
+import { HIST, ITEMS, LOCS, nowStamp, TODAY, TODAY_ISO } from "./data";
 import type { Hist, Item, Loc } from "./data";
+
+/** Next free item id: max existing + 1 (deterministic, unlike Date.now()). */
+const nextId = (items: Item[]): number => Math.max(0, ...items.map((i) => i.id)) + 1;
 
 export const DAY_MS = 86_400_000;
 
@@ -171,7 +174,7 @@ export function applyAdd(
       if (exp) ex.exp = exp;
     } else {
       nextItems.push({
-        id: Date.now() + added,
+        id: nextId(nextItems),
         name,
         kind: r.kind,
         qty: r.qty,
@@ -183,7 +186,7 @@ export function applyAdd(
         target: Math.max(2, r.qty),
       });
     }
-    nextHist.unshift({ evt: "ADD", name, qty: r.qty, to: r.loc, who: owner, date: NOW_STAMP });
+    nextHist.unshift({ evt: "ADD", name, qty: r.qty, to: r.loc, who: owner, date: nowStamp() });
     added++;
   });
   return { items: nextItems, hist: nextHist, added };
@@ -217,7 +220,7 @@ export function applyMove(
       dst.qty += qty;
     } else {
       nextItems.push({
-        id: Date.now() + Math.floor(Math.random() * 1e6),
+        id: nextId(nextItems),
         name: src.name,
         kind: src.kind,
         qty,
@@ -229,7 +232,7 @@ export function applyMove(
         target: src.target,
       });
     }
-    nextHist.unshift({ evt: "MOVE", name: src.name, qty, from, to: r.to, who: owner, date: NOW_STAMP });
+    nextHist.unshift({ evt: "MOVE", name: src.name, qty, from, to: r.to, who: owner, date: nowStamp() });
   });
   return {
     items: nextItems.filter((i) => i.qty > 0 || i.min > 0),
@@ -251,7 +254,7 @@ export function applyUse(
   const q = Math.min(useQty, it.qty);
   const nextItems = items.map((i) => (i.id === it.id ? { ...i, qty: i.qty - q, date: TODAY_ISO } : i));
   const nextHist = hist.slice();
-  nextHist.unshift({ evt: "USE", name: it.name, qty: q, to: it.loc, who: owner, date: NOW_STAMP });
+  nextHist.unshift({ evt: "USE", name: it.name, qty: q, to: it.loc, who: owner, date: nowStamp() });
   return { items: nextItems, hist: nextHist, left: it.qty - q, used: q, name: it.name };
 }
 

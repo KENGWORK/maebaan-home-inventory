@@ -117,11 +117,34 @@ vercel.json         { "framework": "vite" }  + node runtime for /api
 - `App.tsx`:
   - On mount `fetchState()`; show a clay spinner inside the phone frame while
     pending. On failure → fall back to `src/data.ts` seed + one-time offline toast.
-  - `addSave`/`moveSave`/`useSave` and the sheet actions call `await mutate(...)`
-    then `set(returnedState)`. Network error → red toast `เชื่อมต่อไม่ได้ · ลองใหม่`,
-    local state untouched.
+  - The client only writes to `/api` once it has loaded server state
+    (`hydrated`). A boot-time `fetchState` failure ⇒ a local-only demo session:
+    seed data, a `ตัวอย่าง` pill, no writes, until reload. This matters because
+    the seed's ids are pinned constants that have nothing to do with a live
+    sheet's rows — writing from an unhydrated client would corrupt real data.
+  - `addSave`/`moveSave`/`useSave` and the sheet actions apply the mutation
+    optimistically, then (when hydrated) call `mutate(...)` and
+    `set(returnedState)`. On a `mutate` failure the optimistic change is rolled
+    back with a toast; `online` flips to an `ออฟไลน์` pill and self-heals on the
+    next success. `online` is only meaningful once `hydrated` — before that the
+    pill reads `ตัวอย่าง` instead.
   - min/target steppers, place-code rename, noStock toggle: debounce ~600ms
     before calling `mutate` (avoid spamming the Sheet while holding a button).
+    The debounce carries a separate optimistic message and server message: a
+    place-code edit renames the row one keystroke at a time locally, while the
+    server — which still knows the row under the code it had when the edit began
+    — receives the single NET rename. The debounce key is that original code, so
+    it stays stable across keystrokes.
+  - Settings place rows are keyed by position, not by code: a code edit rewrites
+    the code on every keystroke, and a changing React key remounts the row,
+    blurring the input mid-type.
+
+### Known v1 limitations
+
+- Concurrent writers can mint the same new-item id (`max+1`, last-write-wins).
+- A MIN/TARGET (or place-field) debounce that fails to save shows a toast and
+  flips the offline pill, but the optimistic value reverts only on reload — the
+  coalescing has discarded its "before" by the time the write is attempted.
 - `src/data.ts` seed retained (used by `/api/init` and offline fallback).
 - `src/logic.ts` unchanged.
 
