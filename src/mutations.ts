@@ -18,9 +18,9 @@ export type AddRow = {
 };
 
 export type Msg =
-  | { type: "add"; addRows: AddRow[] }
-  | { type: "move"; moveRows: { itemId: number | null; qty: number; to: string }[] }
-  | { type: "use"; useId: number | null; useQty: number }
+  | { type: "add"; addRows: AddRow[]; photos?: string[] }
+  | { type: "move"; moveRows: { itemId: number | null; qty: number; to: string }[]; photos?: string[] }
+  | { type: "use"; useId: number | null; useQty: number; photos?: string[] }
   | { type: "newItem"; name: string; kind: Kind }
   | { type: "delItem"; id: number }
   | { type: "setItemField"; id: number; min?: number; target?: number; noStock?: boolean }
@@ -42,12 +42,12 @@ export function applyMutation(snap: Snapshot, msg: Msg, owner: string): Mutation
 
   switch (msg.type) {
     case "add": {
-      const r = applyAdd(items, history, msg.addRows, owner);
+      const r = applyAdd(items, history, msg.addRows, owner, undefined, msg.photos ?? []);
       if ("error" in r) return { error: r.error };
       return { snapshot: { items: r.items, locations, history: r.hist }, result: { added: r.added } };
     }
     case "move": {
-      const r = applyMove(items, history, msg.moveRows, owner);
+      const r = applyMove(items, history, msg.moveRows, owner, msg.photos ?? []);
       if ("error" in r) return { error: r.error };
       return {
         snapshot: { items: r.items, locations, history: r.hist },
@@ -55,7 +55,7 @@ export function applyMutation(snap: Snapshot, msg: Msg, owner: string): Mutation
       };
     }
     case "use": {
-      const r = applyUse(items, history, msg.useId, msg.useQty, owner);
+      const r = applyUse(items, history, msg.useId, msg.useQty, owner, msg.photos ?? []);
       if ("error" in r) return { error: r.error };
       return {
         snapshot: { items: r.items, locations, history: r.hist },

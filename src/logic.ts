@@ -143,12 +143,19 @@ export interface AddRow {
   expVal: string;
 }
 
+/** union of two photo-id lists, order-preserving, no dupes */
+const mergePhotos = (a: string[] | undefined, b: string[] | undefined): string[] | undefined => {
+  const out = [...new Set([...(a ?? []), ...(b ?? [])])];
+  return out.length ? out : undefined;
+};
+
 export function applyAdd(
   items: Item[],
   hist: Hist[],
   addRows: AddRow[],
   owner: string,
   today: Date = TODAY,
+  photos: string[] = [],
 ): { items: Item[]; hist: Hist[]; added: number } | { error: string } {
   const rows = addRows.filter((r) => r.name.trim() && r.loc);
   if (!rows.length) return { error: "กรอกชื่อของและเลือกสถานที่ก่อนบันทึก" };
@@ -172,6 +179,7 @@ export function applyAdd(
       ex.qty += r.qty;
       ex.date = TODAY_ISO;
       if (exp) ex.exp = exp;
+      ex.photos = mergePhotos(ex.photos, photos);
     } else {
       nextItems.push({
         id: nextId(nextItems),
@@ -184,9 +192,13 @@ export function applyAdd(
         exp,
         min: 1,
         target: Math.max(2, r.qty),
+        photos: photos.length ? [...photos] : undefined,
       });
     }
-    nextHist.unshift({ evt: "ADD", name, qty: r.qty, to: r.loc, who: owner, date: nowStamp() });
+    nextHist.unshift({
+      evt: "ADD", name, qty: r.qty, to: r.loc, who: owner, date: nowStamp(),
+      photos: photos.length ? [...photos] : undefined,
+    });
     added++;
   });
   return { items: nextItems, hist: nextHist, added };
@@ -203,6 +215,7 @@ export function applyMove(
   hist: Hist[],
   moveRows: MoveRow[],
   owner: string,
+  photos: string[] = [],
 ): { items: Item[]; hist: Hist[]; moved: number; firstTo: string } | { error: string } {
   const rows = moveRows.filter((r) => r.itemId && r.to);
   if (!rows.length) return { error: "เลือกของและสถานที่ใหม่ก่อนบันทึก" };
@@ -218,6 +231,7 @@ export function applyMove(
     const dst = nextItems.find((i) => i.name === src.name && i.loc === r.to);
     if (dst) {
       dst.qty += qty;
+      dst.photos = mergePhotos(dst.photos, [...(src.photos ?? []), ...photos]);
     } else {
       nextItems.push({
         id: nextId(nextItems),
@@ -230,9 +244,13 @@ export function applyMove(
         exp: src.exp,
         min: src.min,
         target: src.target,
+        photos: mergePhotos(src.photos, photos),
       });
     }
-    nextHist.unshift({ evt: "MOVE", name: src.name, qty, from, to: r.to, who: owner, date: nowStamp() });
+    nextHist.unshift({
+      evt: "MOVE", name: src.name, qty, from, to: r.to, who: owner, date: nowStamp(),
+      photos: photos.length ? [...photos] : undefined,
+    });
   });
   return {
     items: nextItems.filter((i) => i.qty > 0 || i.min > 0),
@@ -248,13 +266,17 @@ export function applyUse(
   useId: number | null,
   useQty: number,
   owner: string,
+  photos: string[] = [],
 ): { items: Item[]; hist: Hist[]; left: number; used: number; name: string } | { error: string } {
   const it = itemOf(items, useId);
   if (!it) return { error: "เลือกของที่จะใช้ก่อน" };
   const q = Math.min(useQty, it.qty);
   const nextItems = items.map((i) => (i.id === it.id ? { ...i, qty: i.qty - q, date: TODAY_ISO } : i));
   const nextHist = hist.slice();
-  nextHist.unshift({ evt: "USE", name: it.name, qty: q, to: it.loc, who: owner, date: nowStamp() });
+  nextHist.unshift({
+    evt: "USE", name: it.name, qty: q, to: it.loc, who: owner, date: nowStamp(),
+    photos: photos.length ? [...photos] : undefined,
+  });
   return { items: nextItems, hist: nextHist, left: it.qty - q, used: q, name: it.name };
 }
 

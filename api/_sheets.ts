@@ -3,18 +3,25 @@ import type { Hist, HistEvt, Item, Kind, Loc } from "../src/data.js";
 import { SEED } from "../src/data.js";
 import type { Snapshot } from "../src/mutations.js";
 
-export const ITEM_COLS = ["id","name","kind","qty","loc","owner","date","exp","min","target","noStock"] as const;
+export const ITEM_COLS = ["id","name","kind","qty","loc","owner","date","exp","min","target","noStock","photos"] as const;
 export const LOC_COLS = ["code","name","room"] as const;
-export const HIST_COLS = ["ts","evt","name","qty","from","to","who"] as const;
+export const HIST_COLS = ["ts","evt","name","qty","from","to","who","photos"] as const;
 
 const cell = (v: unknown) => (v === undefined || v === null ? "" : String(v));
+/** photo id lists live in one cell, comma-separated (Drive ids have no commas). */
+const photoCell = (ids: string[] | undefined) => (ids ?? []).join(",");
+/** empty -> undefined, to match the "absent key" convention used for exp/noStock */
+const parsePhotos = (s: string | undefined): string[] | undefined => {
+  const out = (s ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  return out.length ? out : undefined;
+};
 
 export function itemsToRows(items: Item[]): string[][] {
   return [
     [...ITEM_COLS],
     ...items.map((i) => [
       cell(i.id), i.name, i.kind, cell(i.qty), i.loc, i.owner, i.date,
-      cell(i.exp), cell(i.min), cell(i.target), i.noStock ? "TRUE" : "",
+      cell(i.exp), cell(i.min), cell(i.target), i.noStock ? "TRUE" : "", photoCell(i.photos),
     ]),
   ];
 }
@@ -32,6 +39,7 @@ export function rowsToItems(rows: string[][]): Item[] {
     min: Number(r[8] ?? 0),
     target: Number(r[9] ?? 1),
     noStock: (r[10] ?? "").toUpperCase() === "TRUE" ? true : undefined,
+    photos: parsePhotos(r[11]),
   }));
 }
 
@@ -47,13 +55,16 @@ export function rowsToLocs(rows: string[][]): Loc[] {
 }
 
 export function historyToRows(hist: Hist[]): string[][] {
-  return hist.map((h) => [h.date, h.evt, h.name, cell(h.qty), cell(h.from), cell(h.to), h.who]);
+  return hist.map((h) => [
+    h.date, h.evt, h.name, cell(h.qty), cell(h.from), cell(h.to), h.who, photoCell(h.photos),
+  ]);
 }
 
 export function rowsToHistory(rows: string[][]): Hist[] {
   return rows.slice(1).filter((r) => r[0]).map((r) => ({
     date: r[0], evt: r[1] as HistEvt, name: r[2] ?? "", qty: Number(r[3] ?? 0),
     from: r[4] || undefined, to: r[5] || undefined, who: r[6] ?? "",
+    photos: parsePhotos(r[7]),
   }));
 }
 
@@ -68,7 +79,8 @@ export interface SheetsClient {
   addTabs(names: string[]): Promise<void>;
 }
 
-export function realClient(): SheetsClient {
+/** A JWT for the service account, scoped as asked. Shared by the Sheets + Drive clients. */
+export function serviceJwt(scopes: string[]): JWT {
   let key: { client_email: string; private_key: string };
   try {
     key = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON as string);
@@ -77,12 +89,12 @@ export function realClient(): SheetsClient {
   }
   if (!key.client_email || !key.private_key)
     throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON missing client_email/private_key");
+  return new JWT({ email: key.client_email, key: key.private_key.replace(/\\n/g, "\n"), scopes });
+}
+
+export function realClient(): SheetsClient {
   const id = process.env.SHEET_ID as string;
-  const jwt = new JWT({
-    email: key.client_email,
-    key: key.private_key.replace(/\\n/g, "\n"),
-    scopes: ["https://www.googleapis.com/auth/spreadsheets"],
-  });
+  const jwt = serviceJwt(["https://www.googleapis.com/auth/spreadsheets"]);
   const base = `https://sheets.googleapis.com/v4/spreadsheets/${id}`;
   const call = async (url: string, init?: RequestInit) => {
     const { token } = await jwt.getAccessToken();
@@ -157,7 +169,7 @@ export async function writeSnapshot(
 ): Promise<void> {
   const itemRows = itemsToRows(next.items); // header + N rows
   await c.updateRange("items!A1", itemRows);
-  await c.clearRange(`items!A${itemRows.length + 1}:K`);
+  await c.clearRange(`items!A${itemRows.length + 1}:L`);
   const locRows = locsToRows(next.locations);
   await c.updateRange("locations!A1", locRows);
   await c.clearRange(`locations!A${locRows.length + 1}:C`);

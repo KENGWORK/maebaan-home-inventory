@@ -23,9 +23,10 @@ import {
 } from "./logic";
 import { applyMutation, type Msg, type Snapshot } from "./mutations";
 import { fetchState, mutate } from "./api";
+import { idSrc, shotSrc, uploadPhoto, type Shot } from "./photos";
 import { css } from "./css";
 import { IOSFrame } from "./IOSFrame";
-import { chip, codeBadge, DANGER, ghost, PRIM, pill, SEC, shot } from "./ui";
+import { chip, codeBadge, DANGER, ghost, PRIM, pill, SEC } from "./ui";
 import {
   BackChevron,
   ChevronRight,
@@ -72,6 +73,7 @@ interface MoveRow {
   locQuery: string;
 }
 interface Viewer {
+  /** already-resolved <img> src strings (local blob URL or /api/photo?id=…) */
   shots: string[];
   idx: number;
   src: string;
@@ -102,7 +104,12 @@ interface State {
   bought: string[];
   toast: string;
   sheet: Sheet | null;
-  camShots: string[];
+  /** photos captured on the camera screen, before an event type is chosen */
+  camShots: Shot[];
+  /** photos carried into the add/move/use screen, uploaded on save */
+  draftPhotos: Shot[];
+  /** an upload is in flight */
+  uploading: boolean;
   camEvt: CamEvt;
   viewer: Viewer | null;
   owner: string;
@@ -160,6 +167,8 @@ const initial = (): State => ({
   toast: "",
   sheet: null,
   camShots: [],
+  draftPhotos: [],
+  uploading: false,
   camEvt: "ADD",
   viewer: null,
   owner: "เก่ง",
@@ -208,6 +217,25 @@ export function App() {
   // Same reason: the debounce timer fires long after the render that scheduled it.
   const hydratedRef = useRef(s.hydrated);
   hydratedRef.current = s.hydrated;
+
+  // ── camera capture ─────────────────────────────────────────────────────────
+  // One hidden <input capture> shared by every "take a photo" button; a ref says
+  // whether the resulting files go to the camera screen or the current draft.
+  const fileInput = useRef<HTMLInputElement>(null);
+  const captureTarget = useRef<"cam" | "draft">("cam");
+  const openCamera = (target: "cam" | "draft") => {
+    captureTarget.current = target;
+    fileInput.current?.click();
+  };
+  const onCapture = (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
+    e.target.value = ""; // allow re-selecting the same file
+    if (!files.length) return;
+    const shots: Shot[] = files.map((file) => ({ file, local: URL.createObjectURL(file) }));
+    if (captureTarget.current === "cam") setS((p) => ({ ...p, camShots: [...p.camShots, ...shots] }));
+    else setS((p) => ({ ...p, draftPhotos: [...p.draftPhotos, ...shots] }));
+  };
+  const revoke = (list: Shot[]) => list.forEach((sh) => sh.local && URL.revokeObjectURL(sh.local));
 
   const set = (patch: Partial<State>) => setS((prev) => ({ ...prev, ...patch }));
   const nav = (screen: Screen) => () => set({ screen, sheet: null });
@@ -432,9 +460,37 @@ export function App() {
     });
   };
 
-  const addSave = () => {
+  /**
+   * Upload every draft photo and return their Drive ids. Empty (with a note) when
+   * there is nothing to upload, when the client is not hydrated (demo mode — cannot
+   * persist), or when an upload fails; the record is still saved, just photo-less.
+   */
+  const resolvePhotos = async (): Promise<string[]> => {
+    if (!s.draftPhotos.length) return [];
+    if (!s.hydrated) {
+      flash("โหมดตัวอย่าง — รูปยังไม่ถูกบันทึก");
+      return [];
+    }
+    set({ uploading: true });
+    try {
+      const ids = await Promise.all(s.draftPhotos.map((sh) => uploadPhoto(sh.file!)));
+      revoke(s.draftPhotos);
+      set({ uploading: false, draftPhotos: [] });
+      return ids;
+    } catch (e) {
+      set({ uploading: false });
+      revoke(s.draftPhotos);
+      set({ draftPhotos: [] });
+      flash(`อัปโหลดรูปไม่สำเร็จ · ${(e as Error).message} — บันทึกรายการโดยไม่มีรูป`);
+      return [];
+    }
+  };
+
+  const addSave = async () => {
+    if (s.uploading) return;
+    const photos = await resolvePhotos();
     const prev: Snapshot = { items: s.items, locations: s.locs, history: s.hist };
-    const msg: Msg = { type: "add", addRows: s.addRows };
+    const msg: Msg = { type: "add", addRows: s.addRows, photos };
     const res = applyMutation(prev, msg, s.owner);
     if ("error" in res) return flash(res.error);
     set({
@@ -450,11 +506,14 @@ export function App() {
     flash(`บันทึกเก็บของ ${res.result.added} รายการ โดย ${s.owner}`);
     syncOrRollback(msg, prev);
   };
-  const moveSave = () => {
+  const moveSave = async () => {
+    if (s.uploading) return;
+    const photos = await resolvePhotos();
     const prev: Snapshot = { items: s.items, locations: s.locs, history: s.hist };
     const msg: Msg = {
       type: "move",
       moveRows: s.moveRows.map((r) => ({ itemId: r.itemId, qty: r.qty, to: r.to })),
+      photos,
     };
     const res = applyMutation(prev, msg, s.owner);
     if ("error" in res) return flash(res.error);
@@ -470,9 +529,11 @@ export function App() {
     flash(`ย้าย ${res.result.moved} รายการ โดย ${s.owner}`);
     syncOrRollback(msg, prev);
   };
-  const useSave = () => {
+  const useSave = async () => {
+    if (s.uploading) return;
+    const photos = await resolvePhotos();
     const prev: Snapshot = { items: s.items, locations: s.locs, history: s.hist };
-    const msg: Msg = { type: "use", useId: s.useId, useQty: s.useQty };
+    const msg: Msg = { type: "use", useId: s.useId, useQty: s.useQty, photos };
     const res = applyMutation(prev, msg, s.owner);
     if ("error" in res) return flash(res.error);
     set({
@@ -504,12 +565,23 @@ export function App() {
     onAddSave: addSave,
     onMoveSave: moveSave,
     onUseSave: useSave,
+    openCamera,
+    revoke,
   }), [s]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const h = v.head;
 
   return (
     <IOSFrame>
+      <input
+        ref={fileInput}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple
+        hidden
+        onChange={onCapture}
+      />
       <div style={st(`height:100%;filter:${tone.f}`)}>
         <div style={st("height:100%;display:flex;flex-direction:column;background:linear-gradient(180deg,#F5EFFC 0%,#EDE5F7 100%);position:relative;overflow:hidden")}>
           {/* header */}
@@ -618,6 +690,8 @@ type Helpers = {
   onAddSave: () => void;
   onMoveSave: () => void;
   onUseSave: () => void;
+  openCamera: (target: "cam" | "draft") => void;
+  revoke: (list: Shot[]) => void;
 };
 
 function build(
@@ -631,7 +705,7 @@ function build(
   const {
     set, flash, nav, dispatch,
     setItemFieldDebounced, renamePlaceDebounced, setPlaceCodeDebounced,
-    onAddSave, onMoveSave, onUseSave,
+    onAddSave, onMoveSave, onUseSave, openCamera, revoke,
   } = H;
   const items = s.items;
   const screen = s.screen;
@@ -685,10 +759,11 @@ function build(
     key: p.id,
     name: p.name,
     src: p.src,
-    shots: p.shots.map((label, si) => ({
-      label,
-      style: shot(p.shots.length > 1 ? 126 : 170),
-      on: () => set({ viewer: { shots: p.shots, idx: si, src: `${p.name} · ${p.src}` } }),
+    shots: p.shots.map((id, si) => ({
+      src: idSrc(id),
+      w: p.shots.length > 1 ? 126 : 170,
+      on: () =>
+        set({ viewer: { shots: p.shots.map(idSrc), idx: si, src: `${p.name} · ${p.src}` } }),
     })),
     status: p.miss,
     statusStyle: `margin-top:5px;font:400 12px "IBM Plex Sans Thai",sans-serif;color:${p.ready ? "#2E8F6B" : "#C4692F"}`,
@@ -851,6 +926,15 @@ function build(
         ? `EXP ${i.exp}${dd !== null ? (dd < 0 ? " (เลยแล้ว)" : ` (อีก ${dd} วัน)`) : ""}`
         : "ของใช้ · ไม่มี EXP",
       expStyle: `font:400 11px "IBM Plex Mono",monospace;color:${i.exp && dd !== null && dd <= 3 ? "#C9524F" : "#9A90BC"}`,
+      photo: (i.photos ?? [])[0] ? idSrc((i.photos ?? [])[0]) : "",
+      photoCount: (i.photos ?? []).length,
+      openPhotos:
+        (i.photos ?? []).length > 0
+          ? () =>
+              set({
+                viewer: { shots: (i.photos ?? []).map(idSrc), idx: 0, src: i.name },
+              })
+          : undefined,
     };
   });
 
@@ -1036,24 +1120,40 @@ function build(
         style: PRIM,
         on: () => {
           const scr = { ADD: "add", MOVE: "move", USE: "use" }[s.camEvt] as Screen;
-          set({ sheet: null, screen: scr, camShots: [] });
+          // carry the captured shots into the draft for this screen; they upload on save
+          set({ sheet: null, screen: scr, draftPhotos: s.camShots, camShots: [] });
         },
       },
       {
         label: "ส่งเข้ารายการรอบันทึก",
         style: SEC,
-        on: () => {
-          const p = {
-            id: `p${Date.now()}`,
-            name: "ของจากรูปใหม่",
-            src: "IN-APP",
-            shots: s.camShots.slice(),
-            evt: s.camEvt,
-            ready: false,
-            miss: "ยังไม่ได้ระบุชื่อ / จำนวน / สถานที่",
-          };
-          set({ sheet: null, screen: "pending", camShots: [], pending: [p, ...s.pending] });
-          flash("ส่งเข้ารายการรอบันทึกแล้ว");
+        on: async () => {
+          if (!s.hydrated) return flash("โหมดตัวอย่าง — บันทึกรูปไม่ได้");
+          set({ uploading: true });
+          try {
+            const ids = await Promise.all(s.camShots.map((sh) => uploadPhoto(sh.file!)));
+            revoke(s.camShots);
+            const p = {
+              id: `p${Date.now()}`,
+              name: "ของจากรูปใหม่",
+              src: "IN-APP" as const,
+              shots: ids,
+              evt: s.camEvt,
+              ready: false,
+              miss: "ยังไม่ได้ระบุชื่อ / จำนวน / สถานที่",
+            };
+            set({
+              sheet: null,
+              screen: "pending",
+              camShots: [],
+              uploading: false,
+              pending: [p, ...s.pending],
+            });
+            flash("ส่งเข้ารายการรอบันทึกแล้ว");
+          } catch (e) {
+            set({ uploading: false });
+            flash(`อัปโหลดรูปไม่สำเร็จ · ${(e as Error).message}`);
+          }
         },
       },
     ];
@@ -1243,22 +1343,38 @@ function build(
     pendingList,
     pendingEmpty: s.pending.length === 0,
 
-    camShootItem: () => set({ camShots: [...s.camShots, `สิ่งของ ${s.camShots.length + 1}`] }),
-    camShootPlace: () => set({ camShots: [...s.camShots, "ที่เก็บ (option)"] }),
-    camClear: () => set({ camShots: [] }),
+    camShootItem: () => openCamera("cam"),
+    camShootPlace: () => openCamera("cam"),
+    camClear: () => {
+      revoke(s.camShots);
+      set({ camShots: [] });
+    },
     camClearStyle: s.camShots.length ? ghost() : "display:none",
     camCount: s.camShots.length,
-    camThumbs: s.camShots.map((label, si) => ({
+    camThumbs: s.camShots.map((sh, si) => ({
       key: si,
-      label,
-      style: shot(86),
-      on: () => set({ viewer: { shots: s.camShots, idx: si, src: "รูปที่ถ่ายในแอพ" } }),
+      src: shotSrc(sh),
+      on: () =>
+        set({ viewer: { shots: s.camShots.map(shotSrc), idx: si, src: "รูปที่ถ่ายในแอพ" } }),
     })),
     camEvents,
+    uploading: s.uploading,
     camSave: () => {
       if (!s.camShots.length) return flash("ถ่ายรูปอย่างน้อย 1 รูปก่อน");
       set({ sheet: { kind: "cam" } });
     },
+    // draft photos on the add/move/use screens
+    draftThumbs: s.draftPhotos.map((sh, si) => ({
+      key: si,
+      src: shotSrc(sh),
+      remove: () => {
+        if (sh.local) URL.revokeObjectURL(sh.local);
+        set({ draftPhotos: s.draftPhotos.filter((_, i) => i !== si) });
+      },
+      on: () =>
+        set({ viewer: { shots: s.draftPhotos.map(shotSrc), idx: si, src: "รูปที่จะแนบ" } }),
+    })),
+    addDraftPhoto: () => openCamera("draft"),
 
     ownerChips: (["เก่ง", "omo"] as const).map((o) => ({
       label: o,
@@ -1377,8 +1493,9 @@ function build(
     setAddOpen: () => set({ sheet: { kind: "newItem" }, sheetText: "" }),
 
     // viewer
-    viewerLabel: s.viewer ? s.viewer.shots[s.viewer.idx] : "",
+    viewerSrc: s.viewer ? s.viewer.shots[s.viewer.idx] : "",
     viewerMeta: s.viewer ? `${s.viewer.src} · ${s.viewer.idx + 1}/${s.viewer.shots.length}` : "",
+    viewerHasMany: !!s.viewer && s.viewer.shots.length > 1,
     viewerPrev: () => {
       const vv = s.viewer;
       if (!vv) return;
@@ -1504,14 +1621,13 @@ function PendingScreen({ v }: { v: V }) {
     <div style={st("animation:clayIn .3s ease both;display:flex;flex-direction:column;gap:14px")}>
       {v.pendingList.map((p) => (
         <div key={p.key} style={st("border-radius:28px;padding:14px;background:#FBF6FE;box-shadow:10px 13px 28px rgba(120,95,175,.18),-6px -8px 18px #ffffff,inset 2px 2px 4px #ffffff")}>
-          <div style={st("display:flex;gap:10px;overflow-x:auto;padding-bottom:2px")}>
-            {p.shots.map((sh, i) => (
-              <button key={i} onClick={sh.on} style={st(sh.style)}>
-                <span style={st("font:400 9.5px 'IBM Plex Mono',monospace;color:#9A90BC")}>{sh.label}</span>
-                <span style={st("position:absolute;right:8px;bottom:7px;font:500 9px 'IBM Plex Mono',monospace;color:#6A57D6;background:rgba(251,246,254,.9);border-radius:7px;padding:3px 6px;box-shadow:2px 2px 6px rgba(120,95,175,.2)")}>ขยาย</span>
-              </button>
-            ))}
-          </div>
+          {p.shots.length > 0 && (
+            <div style={st("display:flex;gap:10px;overflow-x:auto;padding-bottom:2px")}>
+              {p.shots.map((sh, i) => (
+                <PhotoTile key={i} src={sh.src} w={sh.w} onClick={sh.on} />
+              ))}
+            </div>
+          )}
           <div style={st("display:flex;align-items:baseline;gap:8px;margin-top:12px")}>
             <div style={st("font:500 16px Mitr,sans-serif;color:#3A3254")}>{p.name}</div>
             <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC")}>{p.src}</div>
@@ -1534,23 +1650,81 @@ function PendingScreen({ v }: { v: V }) {
   );
 }
 
+/** rounded photo tile with a lazy <img>; falls back to a soft placeholder while loading / on error */
+function PhotoTile({
+  src,
+  w = 86,
+  onClick,
+  onRemove,
+}: {
+  src: string;
+  w?: number;
+  onClick?: () => void;
+  onRemove?: () => void;
+}) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        position: "relative",
+        flex: "none",
+        width: w,
+        height: Math.round(w * 0.78),
+        borderRadius: 18,
+        overflow: "hidden",
+        background: "#E9E1F6",
+        boxShadow:
+          "inset 3px 4px 9px rgba(90,68,150,.18),inset -2px -3px 8px rgba(255,255,255,.7)",
+        cursor: onClick ? "zoom-in" : "default",
+      }}
+    >
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+      />
+      {onRemove && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          style={st(
+            "position:absolute;right:4px;top:4px;width:20px;height:20px;border:none;border-radius:8px;cursor:pointer;background:rgba(58,46,92,.82);color:#fff;font:500 12px Mitr,sans-serif;display:grid;place-items:center",
+          )}
+        >
+          ×
+        </button>
+      )}
+    </div>
+  );
+}
+
 function CamScreen({ v }: { v: V }) {
+  const last = v.camThumbs[v.camThumbs.length - 1];
   return (
     <div style={st("animation:clayIn .3s ease both")}>
-      <div style={st("border-radius:30px;height:286px;background:repeating-linear-gradient(135deg,#E3DAF3 0 12px,#DAD0EE 12px 24px);box-shadow:inset 6px 8px 18px rgba(90,68,150,.22),inset -5px -6px 14px rgba(255,255,255,.6);display:grid;place-items:center;position:relative")}>
-        <div style={st("text-align:center")}>
-          <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#7C7299;letter-spacing:1.2px")}>CAMERA VIEWFINDER</div>
-          <div style={st("font:400 12px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:6px")}>เล็งไปที่สิ่งของ แล้วกดถ่าย</div>
-        </div>
-        <div style={st("position:absolute;left:16px;top:16px;width:34px;height:34px;border-left:3px solid #C3B7E2;border-top:3px solid #C3B7E2;border-radius:10px 0 0 0")} />
-        <div style={st("position:absolute;right:16px;bottom:16px;width:34px;height:34px;border-right:3px solid #C3B7E2;border-bottom:3px solid #C3B7E2;border-radius:0 0 10px 0")} />
+      <div style={st("border-radius:30px;height:286px;overflow:hidden;background:repeating-linear-gradient(135deg,#E3DAF3 0 12px,#DAD0EE 12px 24px);box-shadow:inset 6px 8px 18px rgba(90,68,150,.22),inset -5px -6px 14px rgba(255,255,255,.6);display:grid;place-items:center;position:relative")}>
+        {last ? (
+          <img src={last.src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <>
+            <div style={st("text-align:center")}>
+              <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#7C7299;letter-spacing:1.2px")}>CAMERA</div>
+              <div style={st("font:400 12px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:6px")}>กดปุ่มเพื่อเปิดกล้อง</div>
+            </div>
+            <div style={st("position:absolute;left:16px;top:16px;width:34px;height:34px;border-left:3px solid #C3B7E2;border-top:3px solid #C3B7E2;border-radius:10px 0 0 0")} />
+            <div style={st("position:absolute;right:16px;bottom:16px;width:34px;height:34px;border-right:3px solid #C3B7E2;border-bottom:3px solid #C3B7E2;border-radius:0 0 10px 0")} />
+          </>
+        )}
       </div>
       <div style={st("display:flex;align-items:center;justify-content:center;gap:20px;margin-top:18px")}>
-        <button onClick={v.camShootItem} style={st("border:none;border-radius:18px;padding:13px 15px;font:500 12.5px Mitr,sans-serif;color:#5B5375;background:#F8F3FD;box-shadow:5px 6px 14px rgba(120,95,175,.16),-4px -5px 12px #ffffff;cursor:pointer")}>ถ่ายสิ่งของ</button>
+        <button onClick={v.camShootItem} style={st("border:none;border-radius:18px;padding:13px 15px;font:500 12.5px Mitr,sans-serif;color:#5B5375;background:#F8F3FD;box-shadow:5px 6px 14px rgba(120,95,175,.16),-4px -5px 12px #ffffff;cursor:pointer")}>เปิดกล้อง</button>
         <button onClick={v.camShootItem} style={st("width:76px;height:76px;flex:none;border:none;border-radius:50%;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.4),-6px -8px 16px rgba(255,255,255,.6),inset 3px 4px 8px rgba(255,255,255,.3),inset -4px -6px 10px rgba(40,20,90,.25);cursor:pointer;display:grid;place-items:center")}>
           <div style={st("width:26px;height:26px;border-radius:50%;border:3px solid rgba(255,255,255,.85)")} />
         </button>
-        <button onClick={v.camShootPlace} style={st("border:none;border-radius:18px;padding:13px 15px;font:500 12.5px Mitr,sans-serif;color:#5B5375;background:#F8F3FD;box-shadow:5px 6px 14px rgba(120,95,175,.16),-4px -5px 12px #ffffff;cursor:pointer")}>ถ่ายที่เก็บ</button>
+        <button onClick={v.camShootPlace} style={st("border:none;border-radius:18px;padding:13px 15px;font:500 12.5px Mitr,sans-serif;color:#5B5375;background:#F8F3FD;box-shadow:5px 6px 14px rgba(120,95,175,.16),-4px -5px 12px #ffffff;cursor:pointer")}>เลือกจากคลัง</button>
       </div>
       <div style={st("display:flex;align-items:center;justify-content:space-between;margin:20px 0 9px")}>
         <div style={st("font:500 13.5px Mitr,sans-serif;color:#5B5375")}>รูปที่ถ่ายไว้ ({v.camCount})</div>
@@ -1558,9 +1732,7 @@ function CamScreen({ v }: { v: V }) {
       </div>
       <div style={st("display:flex;gap:10px;overflow-x:auto;min-height:70px")}>
         {v.camThumbs.map((s2) => (
-          <div key={s2.key} onClick={s2.on} style={st(s2.style + ";cursor:zoom-in")}>
-            <span style={st("font:400 9px 'IBM Plex Mono',monospace;color:#9A90BC")}>{s2.label}</span>
-          </div>
+          <PhotoTile key={s2.key} src={s2.src} onClick={s2.on} />
         ))}
       </div>
       <div style={st("font:500 13.5px Mitr,sans-serif;color:#5B5375;margin:18px 0 10px")}>ประเภทของการบันทึก</div>
@@ -1569,7 +1741,28 @@ function CamScreen({ v }: { v: V }) {
           <button key={i} onClick={e.on} style={st(e.style)}>{e.label}</button>
         ))}
       </div>
-      <button onClick={v.camSave} style={st("width:100%;margin-top:20px;border:none;border-radius:24px;padding:17px;font:500 16px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.34),-5px -7px 14px rgba(255,255,255,.5),inset 2px 3px 6px rgba(255,255,255,.28);cursor:pointer")}>บันทึก</button>
+      <button disabled={v.uploading} onClick={v.camSave} style={st(`width:100%;margin-top:20px;border:none;border-radius:24px;padding:17px;font:500 16px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.34),-5px -7px 14px rgba(255,255,255,.5),inset 2px 3px 6px rgba(255,255,255,.28);cursor:pointer${v.uploading ? ";opacity:.6" : ""}`)}>
+        {v.uploading ? "กำลังอัปโหลด…" : "บันทึก"}
+      </button>
+    </div>
+  );
+}
+
+/** photo strip for the add / move / use screens: draft thumbs + "add photo" */
+function DraftPhotos({ v }: { v: V }) {
+  return (
+    <div style={st("display:flex;gap:10px;overflow-x:auto;margin:4px 0 14px;align-items:center")}>
+      {v.draftThumbs.map((t) => (
+        <PhotoTile key={t.key} src={t.src} w={72} onClick={t.on} onRemove={t.remove} />
+      ))}
+      <button
+        onClick={v.addDraftPhoto}
+        style={st(
+          "flex:none;width:72px;height:56px;border:none;border-radius:18px;cursor:pointer;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.18),inset -2px -2px 7px #ffffff;color:#6A57D6;font:500 12px Mitr,sans-serif;display:grid;place-items:center",
+        )}
+      >
+        + รูป
+      </button>
     </div>
   );
 }
@@ -1677,7 +1870,9 @@ function AddScreen({ v }: { v: V }) {
         ))}
       </div>
       <button onClick={v.addRow} style={st("width:100%;margin-top:14px;border:none;border-radius:22px;padding:15px;font:500 14px Mitr,sans-serif;color:#6A57D6;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.16),inset -3px -4px 10px #ffffff;cursor:pointer")}>+ เพิ่มรายการ</button>
-      <button onClick={v.onAddSave} style={st("width:100%;margin-top:12px;border:none;border-radius:24px;padding:17px;font:500 16px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.34),-5px -7px 14px rgba(255,255,255,.5),inset 2px 3px 6px rgba(255,255,255,.28);cursor:pointer")}>{v.addSaveLabel}</button>
+      <div style={st("font:500 12.5px Mitr,sans-serif;color:#5B5375;margin:16px 0 4px")}>รูปประกอบ</div>
+      <DraftPhotos v={v} />
+      <button disabled={v.uploading} onClick={v.onAddSave} style={st(`width:100%;margin-top:6px;border:none;border-radius:24px;padding:17px;font:500 16px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.34),-5px -7px 14px rgba(255,255,255,.5),inset 2px 3px 6px rgba(255,255,255,.28);cursor:pointer${v.uploading ? ";opacity:.6" : ""}`)}>{v.uploading ? "กำลังอัปโหลดรูป…" : v.addSaveLabel}</button>
     </div>
   );
 }
@@ -1736,7 +1931,9 @@ function MoveScreen({ v }: { v: V }) {
         ))}
       </div>
       <button onClick={v.moveAddRow} style={st("width:100%;margin-top:14px;border:none;border-radius:22px;padding:15px;font:500 14px Mitr,sans-serif;color:#6A57D6;background:#F1ECFA;box-shadow:inset 4px 5px 12px rgba(120,95,175,.16),inset -3px -4px 10px #ffffff;cursor:pointer")}>+ เพิ่มรายการ</button>
-      <button onClick={v.onMoveSave} style={st("width:100%;margin-top:12px;border:none;border-radius:24px;padding:17px;font:500 16px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.34),-5px -7px 14px rgba(255,255,255,.5);cursor:pointer")}>{v.moveSaveLabel}</button>
+      <div style={st("font:500 12.5px Mitr,sans-serif;color:#5B5375;margin:16px 0 4px")}>รูปประกอบ</div>
+      <DraftPhotos v={v} />
+      <button disabled={v.uploading} onClick={v.onMoveSave} style={st(`width:100%;margin-top:6px;border:none;border-radius:24px;padding:17px;font:500 16px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:10px 14px 26px rgba(90,68,180,.34),-5px -7px 14px rgba(255,255,255,.5);cursor:pointer${v.uploading ? ";opacity:.6" : ""}`)}>{v.uploading ? "กำลังอัปโหลดรูป…" : v.moveSaveLabel}</button>
     </div>
   );
 }
@@ -1775,7 +1972,9 @@ function UseScreen({ v }: { v: V }) {
             <Stepper value={v.useQty} dec={v.useDec} inc={v.useInc} size={46} />
           </div>
           <div style={st(v.useWarnStyle)}>{v.useWarn}</div>
-          <button onClick={v.onUseSave} style={st("width:100%;margin-top:16px;border:none;border-radius:22px;padding:16px;font:500 15.5px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:8px 11px 22px rgba(90,68,180,.32),-4px -6px 12px rgba(255,255,255,.5);cursor:pointer")}>บันทึกการใช้</button>
+          <div style={st("font:500 12.5px Mitr,sans-serif;color:#5B5375;margin:14px 0 4px")}>รูปประกอบ</div>
+          <DraftPhotos v={v} />
+          <button disabled={v.uploading} onClick={v.onUseSave} style={st(`width:100%;margin-top:4px;border:none;border-radius:22px;padding:16px;font:500 15.5px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:8px 11px 22px rgba(90,68,180,.32),-4px -6px 12px rgba(255,255,255,.5);cursor:pointer${v.uploading ? ";opacity:.6" : ""}`)}>{v.uploading ? "กำลังอัปโหลดรูป…" : "บันทึกการใช้"}</button>
         </div>
       )}
     </div>
@@ -1818,6 +2017,14 @@ function InvScreen({ v }: { v: V }) {
             {v.invItems.map((i2) => (
               <div key={i2.key} style={st("border-radius:22px;padding:15px 17px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff,inset 2px 2px 4px #ffffff")}>
                 <div style={st("display:flex;align-items:center;gap:10px")}>
+                  {i2.photo && (
+                    <div onClick={i2.openPhotos} style={st("position:relative;flex:none;width:46px;height:46px;border-radius:13px;overflow:hidden;cursor:zoom-in;box-shadow:inset 2px 3px 7px rgba(90,68,150,.18)")}>
+                      <img src={i2.photo} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                      {i2.photoCount > 1 && (
+                        <span style={st("position:absolute;right:2px;bottom:2px;font:500 8.5px 'IBM Plex Mono',monospace;color:#fff;background:rgba(58,46,92,.8);border-radius:6px;padding:1px 4px")}>{i2.photoCount}</span>
+                      )}
+                    </div>
+                  )}
                   <div style={st("flex:1;min-width:0")}>
                     <div style={st("font:500 15px Mitr,sans-serif;color:#3A3254")}>{i2.name}</div>
                     <div style={st("display:flex;align-items:center;gap:7px;margin-top:5px")}>
@@ -2043,24 +2250,20 @@ function ViewerLayer({ v }: { v: V }) {
   return (
     <div onClick={v.closeViewer} style={st("position:absolute;inset:0;z-index:70;background:rgba(38,30,62,.86);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);display:flex;flex-direction:column;padding:56px 18px 34px;animation:clayIn .22s ease both")}>
       <div style={st("display:flex;align-items:center;justify-content:space-between;gap:10px")}>
-        <div style={st("min-width:0")}>
-          <div style={st("font:500 15px Mitr,sans-serif;color:#ffffff")}>{v.viewerLabel}</div>
-          <div style={st("font:400 11px 'IBM Plex Mono',monospace;color:#C6B9E6;margin-top:2px")}>{v.viewerMeta}</div>
-        </div>
+        <div style={st("font:400 11px 'IBM Plex Mono',monospace;color:#C6B9E6;min-width:0")}>{v.viewerMeta}</div>
         <button onClick={v.closeViewer} style={st("width:40px;height:40px;flex:none;border:none;border-radius:14px;cursor:pointer;background:rgba(255,255,255,.14);box-shadow:inset 2px 3px 8px rgba(255,255,255,.22);display:grid;place-items:center")}>
           <CloseIcon />
         </button>
       </div>
-      <div onClick={(e) => e.stopPropagation()} style={st("flex:1;margin-top:18px;border-radius:30px;background:repeating-linear-gradient(135deg,#E9E1F6 0 16px,#DED4EE 16px 32px);box-shadow:inset 6px 8px 20px rgba(90,68,150,.24),inset -5px -6px 16px rgba(255,255,255,.6);display:grid;place-items:center;text-align:center;padding:24px")}>
-        <div>
-          <div style={st("font:400 11px 'IBM Plex Mono',monospace;color:#7C7299;letter-spacing:1.2px")}>FULL SCREEN PHOTO</div>
-          <div style={st("font:500 17px Mitr,sans-serif;color:#3A3254;margin-top:8px")}>{v.viewerLabel}</div>
+      <div onClick={(e) => e.stopPropagation()} style={st("flex:1;margin-top:18px;border-radius:30px;overflow:hidden;background:#1c1630;display:grid;place-items:center")}>
+        <img src={v.viewerSrc} alt="" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }} />
+      </div>
+      {v.viewerHasMany && (
+        <div style={st("display:flex;align-items:center;justify-content:center;gap:12px;margin-top:16px")}>
+          <button onClick={(e) => { e.stopPropagation(); v.viewerPrev(); }} style={st("border:none;cursor:pointer;border-radius:16px;padding:12px 16px;font:500 12.5px Mitr,sans-serif;color:#ffffff;background:rgba(255,255,255,.16);box-shadow:inset 2px 3px 8px rgba(255,255,255,.22)")}>‹ ก่อนหน้า</button>
+          <button onClick={(e) => { e.stopPropagation(); v.viewerNext(); }} style={st("border:none;cursor:pointer;border-radius:16px;padding:12px 16px;font:500 12.5px Mitr,sans-serif;color:#ffffff;background:rgba(255,255,255,.16);box-shadow:inset 2px 3px 8px rgba(255,255,255,.22)")}>ถัดไป ›</button>
         </div>
-      </div>
-      <div style={st("display:flex;align-items:center;justify-content:center;gap:12px;margin-top:16px")}>
-        <button onClick={(e) => { e.stopPropagation(); v.viewerPrev(); }} style={st("border:none;cursor:pointer;border-radius:16px;padding:12px 16px;font:500 12.5px Mitr,sans-serif;color:#ffffff;background:rgba(255,255,255,.16);box-shadow:inset 2px 3px 8px rgba(255,255,255,.22)")}>‹ ก่อนหน้า</button>
-        <button onClick={(e) => { e.stopPropagation(); v.viewerNext(); }} style={st("border:none;cursor:pointer;border-radius:16px;padding:12px 16px;font:500 12.5px Mitr,sans-serif;color:#ffffff;background:rgba(255,255,255,.16);box-shadow:inset 2px 3px 8px rgba(255,255,255,.22)")}>ถัดไป ›</button>
-      </div>
+      )}
     </div>
   );
 }

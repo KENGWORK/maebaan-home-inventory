@@ -12,7 +12,7 @@ describe("mappers", () => {
   it("items round-trip through rows", () => {
     const items = freshItems();
     const rows = itemsToRows(items);
-    expect(rows[0]).toEqual(["id","name","kind","qty","loc","owner","date","exp","min","target","noStock"]);
+    expect(rows[0]).toEqual(["id","name","kind","qty","loc","owner","date","exp","min","target","noStock","photos"]);
     const back = rowsToItems(rows);
     expect(back).toEqual(items);
   });
@@ -39,7 +39,7 @@ describe("mappers", () => {
   it("history round-trips without a header row", () => {
     const hist = [{ evt: "MOVE" as const, name: "powerbank", qty: 1, from: "LIV-01", to: "GAR-01", who: "เก่ง", date: "2026-09-02 11:47" }];
     const rows = historyToRows(hist);
-    expect(rows).toEqual([["2026-09-02 11:47","MOVE","powerbank","1","LIV-01","GAR-01","เก่ง"]]);
+    expect(rows).toEqual([["2026-09-02 11:47","MOVE","powerbank","1","LIV-01","GAR-01","เก่ง",""]]);
     expect(rowsToHistory([["ts","evt","name","qty","from","to","who"], ...rows])).toEqual(hist);
   });
 });

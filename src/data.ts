@@ -27,6 +27,8 @@ export interface Item {
   exp?: string | null;
   /** durable goods that are not stock-counted */
   noStock?: boolean;
+  /** Google Drive file ids of attached photos */
+  photos?: string[];
 }
 
 export interface Pending {
@@ -47,6 +49,8 @@ export interface Hist {
   from?: string;
   who: string;
   date: string;
+  /** Google Drive file ids of photos taken for this action */
+  photos?: string[];
 }
 
 export interface Tone {
@@ -90,9 +94,9 @@ export const ITEMS: Item[] = [
 ];
 
 export const PENDING: Pending[] = [
-  { id: "p1", name: "น้ำปลา", src: "LINE OFFICIAL", shots: ["ฉลากขวด", "ชั้นในตู้"], evt: "ADD", ready: false, miss: "ยังไม่ได้ระบุจำนวน / สถานที่" },
-  { id: "p2", name: "สบู่", src: "IN-APP", shots: ["แพ็ค 3 ก้อน"], evt: "ADD", ready: false, miss: "ยังไม่ได้ระบุจำนวน" },
-  { id: "p3", name: "น้ำยาซักผ้า", src: "IN-APP", shots: ["ถุงเติม", "ตู้ห้องน้ำ", "รหัสตู้"], evt: "MOVE", ready: true, miss: "ข้อมูลพร้อมบันทึก" },
+  { id: "p1", name: "น้ำปลา", src: "LINE OFFICIAL", shots: [], evt: "ADD", ready: false, miss: "ยังไม่ได้ระบุจำนวน / สถานที่" },
+  { id: "p2", name: "สบู่", src: "IN-APP", shots: [], evt: "ADD", ready: false, miss: "ยังไม่ได้ระบุจำนวน" },
+  { id: "p3", name: "น้ำยาซักผ้า", src: "IN-APP", shots: [], evt: "MOVE", ready: true, miss: "ข้อมูลพร้อมบันทึก" },
 ];
 
 export const HIST: Hist[] = [
