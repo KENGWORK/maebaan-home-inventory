@@ -209,7 +209,7 @@ const HEAD: Record<Screen, [string, string]> = {
   add: ["เก็บเข้าบ้าน", "ADD · บันทึกได้หลายรายการต่อครั้ง"],
   move: ["ย้ายของ", "MOVE · เลือกจากของที่มีอยู่"],
   use: ["ใช้ของ", "USE · ตัดยอดออกจากสต็อก"],
-  inv: ["ของในบ้าน", "ค้นหาตามสถานที่หรือชื่อของ"],
+  inv: ["ค้นหา", "ค้นหาตามสถานที่หรือชื่อของ"],
   hist: ["ประวัติ", "Audit trail ย้อนหลัง"],
   shop: ["รายการซื้อ", "หมดแล้ว / ใกล้หมด"],
   set: ["ตั้งค่า", "โทนสี · stock · การแจ้งเตือน"],
@@ -680,7 +680,7 @@ export function App() {
           <div style={st("position:absolute;left:0;right:0;bottom:0;height:126px;padding:0 16px 30px;display:flex;align-items:flex-end;z-index:40;background:linear-gradient(180deg,rgba(240,232,250,0) 0%,rgba(239,231,248,.55) 40%,#EFE7F8 78%);pointer-events:none")}>
             <div style={st("width:100%;display:flex;align-items:center;gap:2px;padding:8px;border-radius:34px;pointer-events:auto;background:linear-gradient(150deg,rgba(255,255,255,.78) 0%,rgba(243,236,252,.5) 48%,rgba(224,213,244,.62) 100%);backdrop-filter:blur(20px) saturate(1.6);-webkit-backdrop-filter:blur(20px) saturate(1.6);box-shadow:0 16px 36px rgba(88,64,148,.26),0 2px 0 rgba(255,255,255,.9) inset,inset 3px 4px 10px rgba(255,255,255,.85),inset -4px -6px 14px rgba(120,95,175,.2)")}>
               <NavBtn item={v.navHome} label="หน้าแรก"><NavHomeIcon /></NavBtn>
-              <NavBtn item={v.navInv} label="ของในบ้าน"><NavInvIcon /></NavBtn>
+              <NavBtn item={v.navInv} label="ค้นหา"><NavInvIcon /></NavBtn>
               <button
                 onClick={() => {
                   // jump to the camera screen AND fire the OS camera in the same
@@ -2016,7 +2016,7 @@ function MoveScreen({ v }: { v: V }) {
 
 function UseScreen({ v }: { v: V }) {
   return (
-    <div style={st("animation:clayIn .3s ease both")}>
+    <div style={st("animation:clayIn .3s ease both;display:flex;flex-direction:column;min-height:100%")}>
       <div style={st("display:flex;align-items:center;gap:10px;border-radius:22px;padding:5px 6px 5px 16px;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")}>
         <SearchIcon />
         <input value={v.useQuery} onChange={v.setUseQuery} placeholder="ค้นหาของที่จะใช้" style={st("flex:1;min-width:0;border:none;background:transparent;padding:13px 0;font:400 14.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254")} />
@@ -2025,7 +2025,7 @@ function UseScreen({ v }: { v: V }) {
         <div style={st("font:500 13px Mitr,sans-serif;color:#5B5375")}>ของทั้งหมดในบ้าน ({v.useCount})</div>
         <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC")}>เลื่อนขึ้น–ลงเพื่อดูทั้งหมด</div>
       </div>
-      <div data-scroll="1" style={st("display:flex;flex-direction:column;gap:10px;margin-top:10px;max-height:330px;overflow-y:auto;padding:2px 8px 2px 2px;border-radius:24px")}>
+      <div data-scroll="1" style={st("display:flex;flex-direction:column;gap:10px;margin-top:10px;flex:1;min-height:140px;overflow-y:auto;padding:2px 8px 2px 2px;border-radius:24px")}>
         {v.useSuggest.map((s2, i) => (
           <button key={i} onClick={s2.on} style={st(s2.style)}>
             <div style={st("flex:1;min-width:0;text-align:left")}>
