@@ -77,6 +77,8 @@ interface Viewer {
   shots: string[];
   idx: number;
   src: string;
+  /** when set, the viewer shows a "เปลี่ยนรูป" button that re-shoots this place's photo */
+  replaceCode?: string;
 }
 type Sheet =
   | { kind: "cam" }
@@ -1160,7 +1162,12 @@ function build(
         viewPhoto: l.photo
           ? () =>
               set({
-                viewer: { shots: [idSrc(l.photo as string)], idx: 0, src: `${l.code} · ${l.name}` },
+                viewer: {
+                  shots: [idSrc(l.photo as string)],
+                  idx: 0,
+                  src: `${l.code} · ${l.name}`,
+                  replaceCode: l.code,
+                },
               })
           : undefined,
         removePhoto: () =>
@@ -1599,6 +1606,13 @@ function build(
     viewerSrc: s.viewer ? s.viewer.shots[s.viewer.idx] : "",
     viewerMeta: s.viewer ? `${s.viewer.src} · ${s.viewer.idx + 1}/${s.viewer.shots.length}` : "",
     viewerHasMany: !!s.viewer && s.viewer.shots.length > 1,
+    viewerReplace: s.viewer?.replaceCode
+      ? () => {
+          const code = s.viewer!.replaceCode!;
+          set({ viewer: null });
+          openPlacePhoto(code);
+        }
+      : undefined,
     viewerPrev: () => {
       const vv = s.viewer;
       if (!vv) return;
@@ -2397,6 +2411,17 @@ function ViewerLayer({ v }: { v: V }) {
           <button onClick={(e) => { e.stopPropagation(); v.viewerPrev(); }} style={st("border:none;cursor:pointer;border-radius:16px;padding:12px 16px;font:500 12.5px Mitr,sans-serif;color:#ffffff;background:rgba(255,255,255,.16);box-shadow:inset 2px 3px 8px rgba(255,255,255,.22)")}>‹ ก่อนหน้า</button>
           <button onClick={(e) => { e.stopPropagation(); v.viewerNext(); }} style={st("border:none;cursor:pointer;border-radius:16px;padding:12px 16px;font:500 12.5px Mitr,sans-serif;color:#ffffff;background:rgba(255,255,255,.16);box-shadow:inset 2px 3px 8px rgba(255,255,255,.22)")}>ถัดไป ›</button>
         </div>
+      )}
+      {v.viewerReplace && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            v.viewerReplace!();
+          }}
+          style={st("margin-top:16px;align-self:center;border:none;cursor:pointer;border-radius:18px;padding:13px 22px;font:500 13.5px Mitr,sans-serif;color:#3A3254;background:rgba(255,255,255,.92);box-shadow:0 10px 24px rgba(0,0,0,.28)")}
+        >
+          เปลี่ยนรูป
+        </button>
       )}
     </div>
   );
