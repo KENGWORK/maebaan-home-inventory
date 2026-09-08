@@ -89,6 +89,14 @@ type Sheet =
   | { kind: "delPending"; id: string; name: string }
   | { kind: "buy"; name: string };
 
+/** A centre-of-screen red confirmation popup (destructive actions). */
+interface Confirm {
+  title: string;
+  body?: string;
+  okLabel: string;
+  onOk: () => void;
+}
+
 interface State {
   loading: boolean;
   /** True once `fetchState` has returned real server state. Until then the app is
@@ -111,6 +119,7 @@ interface State {
   buyArriving: string | null;
   toast: string;
   sheet: Sheet | null;
+  confirm: Confirm | null;
   /** photos captured on the camera screen, before an event type is chosen */
   camShots: Shot[];
   /** photos carried into the add/move/use screen, uploaded on save */
@@ -175,6 +184,7 @@ const initial = (): State => ({
   buyArriving: null,
   toast: "",
   sheet: null,
+  confirm: null,
   camShots: [],
   draftPhotos: [],
   uploading: false,
@@ -734,6 +744,9 @@ export function App() {
 
           {/* bottom sheet */}
           {s.sheet && <SheetLayer v={v} />}
+
+          {/* centre-screen red confirm */}
+          {s.confirm && <CenterConfirm v={v} />}
         </div>
       </div>
     </IOSFrame>
@@ -789,19 +802,44 @@ function build(
     name: string;
     detail: string;
     cta: string;
+    ctaStyle?: string;
     on: () => void;
   }[] = [];
-  expiring.forEach((i) => {
-    const dd = days(i.exp)!;
-    alerts.push({
-      tag: dd <= 1 ? "EXP 1 วัน" : `EXP ${dd} วัน`,
-      pill: pill("#FFE6E6", "#C9524F"),
-      name: i.name,
-      detail: `หมดอายุ ${i.exp} · ${locLabel(i.loc)} · เหลือ ${i.qty}`,
-      cta: "ใช้เลย",
-      on: () => set({ screen: "use", useQuery: i.name, useId: i.id, useQty: 1 }),
+  // most-overdue first, so already-expired items float to the top of the home list
+  [...expiring]
+    .sort((a, b) => (days(a.exp) ?? 99) - (days(b.exp) ?? 99))
+    .forEach((i) => {
+      const dd = days(i.exp)!;
+      if (dd < 0) {
+        alerts.push({
+          tag: "หมดอายุ",
+          pill: pill("#FBE1E0", "#B23F3B"),
+          name: i.name,
+          detail: `หมดอายุแล้ว ${i.exp} · ${locLabel(i.loc)} · ควรนำไปทิ้ง`,
+          cta: "ทิ้ง",
+          ctaStyle:
+            "border:none;flex:none;border-radius:14px;padding:9px 14px;font:500 12px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#E07A76,#C24A46);box-shadow:3px 4px 10px rgba(194,74,70,.3);cursor:pointer",
+          on: () =>
+            set({
+              confirm: {
+                title: `ทิ้ง “${i.name}” ?`,
+                body: `หมดอายุแล้ว — จะลบออกจากระบบถาวร`,
+                okLabel: "ทิ้งเลย",
+                onOk: () => dispatch({ type: "delItem", id: i.id }, () => `ทิ้ง “${i.name}” แล้ว`),
+              },
+            }),
+        });
+        return;
+      }
+      alerts.push({
+        tag: dd <= 1 ? "EXP 1 วัน" : `EXP ${dd} วัน`,
+        pill: pill("#FFE6E6", "#C9524F"),
+        name: i.name,
+        detail: `หมดอายุ ${i.exp} · ${locLabel(i.loc)} · เหลือ ${i.qty}`,
+        cta: "ใช้เลย",
+        on: () => set({ screen: "use", useQuery: i.name, useId: i.id, useQty: 1 }),
+      });
     });
-  });
   out.forEach((i) => {
     alerts.push({
       tag: "หมดแล้ว",
@@ -1096,6 +1134,16 @@ function build(
           on: isB
             ? () => set({ bought: s.bought.filter((x) => x !== r.name) })
             : () => set({ sheet: { kind: "buy", name: r.name } }),
+          onTrash: isB
+            ? () =>
+                set({
+                  confirm: {
+                    title: `ลบ “${r.name}” ออกจากรายการซื้อ?`,
+                    okLabel: "ลบ",
+                    onOk: () => set({ bought: s.bought.filter((x) => x !== r.name) }),
+                  },
+                })
+            : undefined,
         };
       });
   const shopGroups = [
@@ -1648,6 +1696,14 @@ function build(
       set({ placeCode: e.target.value.toUpperCase() }),
     closeSheet: () => set({ sheet: null }),
 
+    // centre-screen confirm
+    confirm: s.confirm,
+    confirmOk: () => {
+      s.confirm?.onOk();
+      set({ confirm: null });
+    },
+    confirmCancel: () => set({ confirm: null }),
+
     navHome: navItem("home"),
     navInv: navItem("inv"),
     navShop: navItem("shop"),
@@ -1719,7 +1775,7 @@ function HomeScreen({ v }: { v: V }) {
                   <div style={st("font:500 14.5px Mitr,sans-serif;color:#3A3254")}>{a.name}</div>
                   <div style={st("font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6")}>{a.detail}</div>
                 </div>
-                <button onClick={a.on} style={st("border:none;flex:none;border-radius:14px;padding:9px 12px;font:500 12px Mitr,sans-serif;color:#5B49C9;background:#EFE9FC;box-shadow:inset 1px 1px 3px #ffffff,3px 4px 10px rgba(120,95,175,.18);cursor:pointer")}>{a.cta}</button>
+                <button onClick={a.on} style={st(a.ctaStyle ?? "border:none;flex:none;border-radius:14px;padding:9px 12px;font:500 12px Mitr,sans-serif;color:#5B49C9;background:#EFE9FC;box-shadow:inset 1px 1px 3px #ffffff,3px 4px 10px rgba(120,95,175,.18);cursor:pointer")}>{a.cta}</button>
               </div>
             ))}
           </div>
@@ -2255,6 +2311,14 @@ function ShopScreen({ v }: { v: V }) {
                   <div style={st("font:400 11.5px 'IBM Plex Sans Thai',sans-serif;color:#8B82A6")}>{r.detail}</div>
                 </div>
                 <div style={st(r.codeStyle)}>{r.code}</div>
+                {r.onTrash && (
+                  <button
+                    onClick={r.onTrash}
+                    style={st("width:28px;height:28px;flex:none;border:none;border-radius:9px;cursor:pointer;background:#FBE9E8;box-shadow:inset 2px 2px 6px rgba(194,74,70,.16);display:grid;place-items:center")}
+                  >
+                    <TrashIcon color="#C24A46" w={12} />
+                  </button>
+                )}
               </div>
             ))}
             {g.empty && (
@@ -2303,13 +2367,13 @@ function SetScreen({ v }: { v: V }) {
               <div key={p.key} style={st("border-radius:24px;padding:15px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff,inset 2px 2px 4px #ffffff")}>
                 <div style={st("display:flex;align-items:center;gap:10px")}>
                   <input value={p.code} onChange={p.setCode} style={st("width:104px;flex:none;border:none;border-radius:13px;padding:10px 11px;text-align:center;font:500 12px 'IBM Plex Mono',monospace;letter-spacing:.6px;color:#ffffff;background:linear-gradient(145deg,#7A6AE2,#5B49C9);box-shadow:4px 5px 12px rgba(90,68,180,.3),inset 2px 2px 5px rgba(255,255,255,.28)")} />
-                  <input value={p.name} onChange={p.setName} placeholder="ชื่อที่เก็บ" style={st("flex:1;min-width:0;border:none;border-radius:14px;padding:11px 13px;font:400 13.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.16),inset -2px -2px 7px #ffffff")} />
+                  <input value={p.name} onChange={p.setName} placeholder="สถานที่รอง เช่น ตู้กับข้าว" style={st("flex:1;min-width:0;border:none;border-radius:14px;padding:11px 13px;font:500 14px Mitr,sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.16),inset -2px -2px 7px #ffffff")} />
                   <button onClick={p.del} style={st("width:30px;height:30px;flex:none;border:none;border-radius:10px;cursor:pointer;background:#FFE9E9;box-shadow:inset 2px 2px 6px rgba(201,82,79,.16);display:grid;place-items:center")}>
                     <TrashIcon />
                   </button>
                 </div>
                 <div style={st("display:flex;align-items:center;gap:10px;margin-top:10px")}>
-                  <input value={p.room} onChange={p.setRoom} placeholder="ห้อง" style={st("flex:1;min-width:0;border:none;border-radius:14px;padding:11px 13px;font:400 13px 'IBM Plex Sans Thai',sans-serif;color:#5B5375;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.16),inset -2px -2px 7px #ffffff")} />
+                  <input value={p.room} onChange={p.setRoom} placeholder="สถานที่หลัก เช่น ห้องครัว" style={st("flex:1;min-width:0;border:none;border-radius:14px;padding:11px 13px;font:400 13px 'IBM Plex Sans Thai',sans-serif;letter-spacing:.2px;color:#6A57D6;background:#ECE6FB;box-shadow:inset 3px 4px 9px rgba(120,95,175,.16),inset -2px -2px 7px #ffffff")} />
                   {p.photo ? (
                     <div
                       onClick={p.viewPhoto}
@@ -2423,6 +2487,44 @@ function ViewerLayer({ v }: { v: V }) {
           เปลี่ยนรูป
         </button>
       )}
+    </div>
+  );
+}
+
+function CenterConfirm({ v }: { v: V }) {
+  const c = v.confirm;
+  if (!c) return null;
+  return (
+    <div
+      onClick={v.confirmCancel}
+      style={st("position:absolute;inset:0;z-index:80;background:rgba(58,40,50,.44);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);display:grid;place-items:center;padding:28px;animation:clayIn .16s ease both")}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={st("width:100%;max-width:320px;border-radius:26px;padding:22px 20px 18px;text-align:center;background:#FCEFEE;box-shadow:0 24px 54px rgba(120,40,36,.34),inset 3px 4px 10px #ffffff;animation:popIn .24s cubic-bezier(.2,1.25,.4,1) both")}
+      >
+        <div style={st("width:44px;height:44px;margin:0 auto 12px;border-radius:15px;background:#F7DAD8;box-shadow:inset 2px 3px 8px rgba(178,63,59,.22);display:grid;place-items:center")}>
+          <TrashIcon color="#B23F3B" w={18} />
+        </div>
+        <div style={st("font:500 16px/1.4 Mitr,sans-serif;color:#B23F3B")}>{c.title}</div>
+        {c.body && (
+          <div style={st("font:400 12.5px/1.6 'IBM Plex Sans Thai',sans-serif;color:#B87873;margin-top:6px")}>{c.body}</div>
+        )}
+        <div style={st("display:flex;gap:10px;margin-top:18px")}>
+          <button
+            onClick={v.confirmCancel}
+            style={st("flex:1;border:none;cursor:pointer;border-radius:16px;padding:13px;font:500 14px Mitr,sans-serif;color:#8B6B68;background:#F3E4E3;box-shadow:inset 3px 4px 9px rgba(178,63,59,.12),inset -2px -2px 7px #ffffff")}
+          >
+            ยกเลิก
+          </button>
+          <button
+            onClick={v.confirmOk}
+            style={st("flex:1;border:none;cursor:pointer;border-radius:16px;padding:13px;font:500 14px Mitr,sans-serif;color:#ffffff;background:linear-gradient(145deg,#E07A76,#C24A46);box-shadow:6px 9px 20px rgba(194,74,70,.34)")}
+          >
+            {c.okLabel}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

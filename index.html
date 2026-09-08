@@ -96,6 +96,16 @@
           transform: rotate(360deg);
         }
       }
+      @keyframes popIn {
+        from {
+          transform: scale(0.88);
+          opacity: 0;
+        }
+        to {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
       @keyframes shopLeave {
         to {
           transform: translateY(30px) scale(0.9);
