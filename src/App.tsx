@@ -785,7 +785,7 @@ function build(
   }));
 
   // camera
-  const camEvents = ([["ADD", "เก็บของ"], ["MOVE", "ย้ายของ"], ["USE", "ของที่ถูกใช้"]] as const).map(
+  const camEvents = ([["ADD", "เก็บของ"], ["MOVE", "ย้ายของ"], ["USE", "ใช้ของ"]] as const).map(
     (e) => ({ label: e[1], style: chip(s.camEvt === e[0], true), on: () => set({ camEvt: e[0] }) }),
   );
 
