@@ -84,6 +84,7 @@ type Sheet =
   | { kind: "newPlace" }
   | { kind: "delPlace"; code: string; name: string }
   | { kind: "delItem"; id: number; name: string }
+  | { kind: "delPending"; id: string; name: string }
   | { kind: "buy"; name: string };
 
 interface State {
@@ -772,6 +773,7 @@ function build(
       { label: "ย้ายของ", on: H.startMoveFrom(p), style: chip(p.evt === "MOVE", true) },
       { label: "ใช้ของ", on: H.startUseFrom(p), style: chip(p.evt === "USE", true) },
     ],
+    onDelete: () => set({ sheet: { kind: "delPending", id: p.id, name: p.name } }),
   }));
 
   // camera
@@ -1097,9 +1099,19 @@ function build(
 
   // sheet
   const sheet = s.sheet;
+  const sheetDanger =
+    sheet?.kind === "delItem" || sheet?.kind === "delPlace" || sheet?.kind === "delPending";
   let sheetTitle = "";
   let sheetSub = "";
-  let sheetActions: { label: string; style: string; on: () => void }[] = [];
+  let sheetActions: {
+    label: string;
+    style: string;
+    on: () => void;
+    sub?: string;
+    icon?: ReactNode;
+    busy?: boolean;
+    disabled?: boolean;
+  }[] = [];
   let sheetHasInput = false;
   let sheetInputPh = "";
   let sheetHasChips = false;
@@ -1116,8 +1128,11 @@ function build(
     sheetSub = `รูป ${s.camShots.length} รูป · ประเภท ${evtLabel}`;
     sheetActions = [
       {
-        label: `บันทึกเลย (${evtLabel})`,
+        label: `บันทึกเลย · ${evtLabel}`,
+        sub: "ไปกรอกจำนวน / สถานที่ต่อทันที",
+        icon: <ChevronRight color="#ffffff" />,
         style: PRIM,
+        disabled: s.uploading,
         on: () => {
           const scr = { ADD: "add", MOVE: "move", USE: "use" }[s.camEvt] as Screen;
           // carry the captured shots into the draft for this screen; they upload on save
@@ -1125,8 +1140,15 @@ function build(
         },
       },
       {
-        label: "ส่งเข้ารายการรอบันทึก",
-        style: SEC,
+        label: s.uploading ? "กำลังส่ง…" : "ส่งเข้ารายการรอบันทึก",
+        sub: "เก็บรูปไว้ก่อน กลับมากรอกทีหลังได้",
+        icon: <NavHistIcon />,
+        // warm/amber tint — matches the orange "pending" badge on the home screen,
+        // and reads clearly different from the primary "do it now" button above it.
+        style:
+          "border:none;cursor:pointer;border-radius:20px;padding:15px;color:#B0632F;background:#FCEEE2;box-shadow:inset 4px 5px 12px rgba(200,120,70,.16),inset -3px -4px 10px #ffffff,3px 5px 13px rgba(220,140,90,.16)",
+        busy: s.uploading,
+        disabled: s.uploading,
         on: async () => {
           if (!s.hydrated) return flash("โหมดตัวอย่าง — บันทึกรูปไม่ได้");
           set({ uploading: true });
@@ -1275,6 +1297,22 @@ function build(
         },
       },
       { label: "ยกเลิก", style: SEC, on: () => set({ sheet: null, sheetText: "" }) },
+    ];
+  }
+
+  if (sheet?.kind === "delPending") {
+    sheetTitle = `ลบ “${sheet.name}” ออกจากรายการรอบันทึก?`;
+    sheetSub = "รูปที่แนบไว้จะไม่ถูกบันทึกเข้าระบบ";
+    sheetActions = [
+      {
+        label: "ลบทิ้ง",
+        style: DANGER,
+        on: () => {
+          set({ pending: s.pending.filter((x) => x.id !== sheet.id), sheet: null });
+          flash("ลบรายการรอบันทึกแล้ว");
+        },
+      },
+      { label: "ยกเลิก", style: SEC, on: () => set({ sheet: null }) },
     ];
   }
 
@@ -1511,6 +1549,7 @@ function build(
     // sheet
     sheetTitle,
     sheetSub,
+    sheetDanger,
     sheetActions,
     sheetHasInput,
     sheetInputPh,
@@ -1628,9 +1667,15 @@ function PendingScreen({ v }: { v: V }) {
               ))}
             </div>
           )}
-          <div style={st("display:flex;align-items:baseline;gap:8px;margin-top:12px")}>
+          <div style={st("display:flex;align-items:center;gap:8px;margin-top:12px")}>
             <div style={st("font:500 16px Mitr,sans-serif;color:#3A3254")}>{p.name}</div>
             <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC")}>{p.src}</div>
+            <button
+              onClick={p.onDelete}
+              style={st("margin-left:auto;flex:none;border:none;cursor:pointer;border-radius:12px;padding:6px 12px;font:500 11.5px Mitr,sans-serif;color:#C24A46;background:#FBE9E8;box-shadow:inset 2px 3px 7px rgba(194,74,70,.16),2px 3px 8px rgba(194,74,70,.12)")}
+            >
+              ลบทิ้ง
+            </button>
           </div>
           <div style={st(p.statusStyle)}>{p.status}</div>
           <div style={st("display:flex;gap:8px;margin-top:12px;flex-wrap:wrap")}>
@@ -2269,12 +2314,13 @@ function ViewerLayer({ v }: { v: V }) {
 }
 
 function SheetLayer({ v }: { v: V }) {
+  const danger = v.sheetDanger;
   return (
     <div onClick={v.closeSheet} style={st("position:absolute;inset:0;background:rgba(58,50,84,.34);z-index:60;display:flex;align-items:flex-end")}>
-      <div onClick={(e) => e.stopPropagation()} style={st("width:100%;border-radius:34px 34px 0 0;padding:22px 22px 40px;background:#F6F0FC;box-shadow:0 -12px 34px rgba(70,50,120,.28),inset 3px 5px 10px #ffffff;animation:clayUp .26s cubic-bezier(.3,1.2,.5,1) both")}>
-        <div style={st("width:46px;height:5px;border-radius:99px;background:#DCD2ED;margin:0 auto 16px")} />
-        <div style={st("font:500 18px/1.4 Mitr,sans-serif;color:#3A3254")}>{v.sheetTitle}</div>
-        <div style={st("font:400 12.5px/1.6 'IBM Plex Sans Thai',sans-serif;color:#8B82A6;margin-top:5px")}>{v.sheetSub}</div>
+      <div onClick={(e) => e.stopPropagation()} style={st(`width:100%;border-radius:34px 34px 0 0;padding:22px 22px 40px;background:${danger ? "#FCEFEE" : "#F6F0FC"};box-shadow:0 -12px 34px ${danger ? "rgba(150,50,45,.26)" : "rgba(70,50,120,.28)"},inset 3px 5px 10px #ffffff;animation:clayUp .26s cubic-bezier(.3,1.2,.5,1) both`)}>
+        <div style={st(`width:46px;height:5px;border-radius:99px;background:${danger ? "#EAC7C4" : "#DCD2ED"};margin:0 auto 16px`)} />
+        <div style={st(`font:500 18px/1.4 Mitr,sans-serif;color:${danger ? "#B23F3B" : "#3A3254"}`)}>{v.sheetTitle}</div>
+        <div style={st(`font:400 12.5px/1.6 'IBM Plex Sans Thai',sans-serif;color:${danger ? "#B87873" : "#8B82A6"};margin-top:5px`)}>{v.sheetSub}</div>
 
         {v.sheetHasInput && (
           <input value={v.sheetInputVal} onChange={v.sheetInputSet} placeholder={v.sheetInputPh} style={st("width:100%;margin-top:15px;border:none;border-radius:18px;padding:15px 16px;font:400 14.5px 'IBM Plex Sans Thai',sans-serif;color:#3A3254;background:#F1ECFA;box-shadow:inset 4px 5px 11px rgba(120,95,175,.18),inset -3px -3px 8px #ffffff")} />
@@ -2309,7 +2355,28 @@ function SheetLayer({ v }: { v: V }) {
 
         <div style={st("display:flex;flex-direction:column;gap:11px;margin-top:18px")}>
           {v.sheetActions.map((a, i) => (
-            <button key={i} onClick={a.on} style={st(a.style)}>{a.label}</button>
+            <button
+              key={i}
+              onClick={a.on}
+              disabled={a.disabled}
+              style={st(
+                a.style +
+                  ";display:flex;flex-direction:column;align-items:center;gap:3px" +
+                  (a.disabled ? ";opacity:.55" : ""),
+              )}
+            >
+              <span style={st("display:flex;align-items:center;gap:8px")}>
+                {a.busy ? (
+                  <span style={st("width:15px;height:15px;flex:none;border-radius:50%;border:2.5px solid rgba(0,0,0,.14);border-top-color:currentColor;animation:spin .7s linear infinite")} />
+                ) : (
+                  a.icon
+                )}
+                <span>{a.label}</span>
+              </span>
+              {a.sub && (
+                <span style={st("font:400 11px 'IBM Plex Sans Thai',sans-serif;opacity:.72")}>{a.sub}</span>
+              )}
+            </button>
           ))}
         </div>
       </div>

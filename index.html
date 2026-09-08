@@ -44,6 +44,21 @@
       select {
         font-family: inherit;
       }
+      button {
+        transition: transform 0.1s ease, filter 0.1s ease, opacity 0.15s ease;
+      }
+      button:active:not(:disabled) {
+        transform: scale(0.965);
+        filter: brightness(0.96);
+      }
+      button:disabled {
+        cursor: default;
+      }
+      @keyframes pulseOnce {
+        50% {
+          transform: scale(1.03);
+        }
+      }
       input:focus,
       select:focus {
         outline: none;
