@@ -1103,15 +1103,7 @@ function build(
     sheet?.kind === "delItem" || sheet?.kind === "delPlace" || sheet?.kind === "delPending";
   let sheetTitle = "";
   let sheetSub = "";
-  let sheetActions: {
-    label: string;
-    style: string;
-    on: () => void;
-    sub?: string;
-    icon?: ReactNode;
-    busy?: boolean;
-    disabled?: boolean;
-  }[] = [];
+  let sheetActions: { label: string; style: string; on: () => void; disabled?: boolean }[] = [];
   let sheetHasInput = false;
   let sheetInputPh = "";
   let sheetHasChips = false;
@@ -1128,9 +1120,7 @@ function build(
     sheetSub = `รูป ${s.camShots.length} รูป · ประเภท ${evtLabel}`;
     sheetActions = [
       {
-        label: `บันทึกเลย · ${evtLabel}`,
-        sub: "ไปกรอกจำนวน / สถานที่ต่อทันที",
-        icon: <ChevronRight color="#ffffff" />,
+        label: `บันทึกเลย (${evtLabel})`,
         style: PRIM,
         disabled: s.uploading,
         on: () => {
@@ -1140,14 +1130,8 @@ function build(
         },
       },
       {
-        label: s.uploading ? "กำลังส่ง…" : "ส่งเข้ารายการรอบันทึก",
-        sub: "เก็บรูปไว้ก่อน กลับมากรอกทีหลังได้",
-        icon: <NavHistIcon />,
-        // warm/amber tint — matches the orange "pending" badge on the home screen,
-        // and reads clearly different from the primary "do it now" button above it.
-        style:
-          "border:none;cursor:pointer;border-radius:20px;padding:15px;color:#B0632F;background:#FCEEE2;box-shadow:inset 4px 5px 12px rgba(200,120,70,.16),inset -3px -4px 10px #ffffff,3px 5px 13px rgba(220,140,90,.16)",
-        busy: s.uploading,
+        label: "ส่งเข้ารายการรอบันทึก",
+        style: SEC,
         disabled: s.uploading,
         on: async () => {
           if (!s.hydrated) return flash("โหมดตัวอย่าง — บันทึกรูปไม่ได้");
@@ -2359,23 +2343,9 @@ function SheetLayer({ v }: { v: V }) {
               key={i}
               onClick={a.on}
               disabled={a.disabled}
-              style={st(
-                a.style +
-                  ";display:flex;flex-direction:column;align-items:center;gap:3px" +
-                  (a.disabled ? ";opacity:.55" : ""),
-              )}
+              style={st(a.style + (a.disabled ? ";opacity:.5" : ""))}
             >
-              <span style={st("display:flex;align-items:center;gap:8px")}>
-                {a.busy ? (
-                  <span style={st("width:15px;height:15px;flex:none;border-radius:50%;border:2.5px solid rgba(0,0,0,.14);border-top-color:currentColor;animation:spin .7s linear infinite")} />
-                ) : (
-                  a.icon
-                )}
-                <span>{a.label}</span>
-              </span>
-              {a.sub && (
-                <span style={st("font:400 11px 'IBM Plex Sans Thai',sans-serif;opacity:.72")}>{a.sub}</span>
-              )}
+              {a.label}
             </button>
           ))}
         </div>
