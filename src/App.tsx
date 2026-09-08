@@ -648,7 +648,15 @@ export function App() {
             <div style={st("width:100%;display:flex;align-items:center;gap:2px;padding:8px;border-radius:34px;pointer-events:auto;background:linear-gradient(150deg,rgba(255,255,255,.78) 0%,rgba(243,236,252,.5) 48%,rgba(224,213,244,.62) 100%);backdrop-filter:blur(20px) saturate(1.6);-webkit-backdrop-filter:blur(20px) saturate(1.6);box-shadow:0 16px 36px rgba(88,64,148,.26),0 2px 0 rgba(255,255,255,.9) inset,inset 3px 4px 10px rgba(255,255,255,.85),inset -4px -6px 14px rgba(120,95,175,.2)")}>
               <NavBtn item={v.navHome} label="หน้าแรก"><NavHomeIcon /></NavBtn>
               <NavBtn item={v.navInv} label="ของในบ้าน"><NavInvIcon /></NavBtn>
-              <button onClick={nav("cam")} style={st("width:66px;height:66px;flex:none;margin:0 2px;border:none;border-radius:24px;background:linear-gradient(150deg,#8B7BE8 0%,#6A57D6 45%,#5039BD 100%);box-shadow:0 14px 28px rgba(80,57,189,.45),-5px -7px 14px rgba(255,255,255,.65),inset 3px 4px 9px rgba(255,255,255,.42),inset -4px -7px 12px rgba(40,20,90,.3);cursor:pointer;display:grid;place-items:center;transform:translateY(-10px)")}>
+              <button
+                onClick={() => {
+                  // jump to the camera screen AND fire the OS camera in the same
+                  // user gesture so the user lands ready to shoot
+                  set({ screen: "cam", sheet: null });
+                  openCamera("cam");
+                }}
+                style={st("width:66px;height:66px;flex:none;margin:0 2px;border:none;border-radius:24px;background:linear-gradient(150deg,#8B7BE8 0%,#6A57D6 45%,#5039BD 100%);box-shadow:0 14px 28px rgba(80,57,189,.45),-5px -7px 14px rgba(255,255,255,.65),inset 3px 4px 9px rgba(255,255,255,.42),inset -4px -7px 12px rgba(40,20,90,.3);cursor:pointer;display:grid;place-items:center;transform:translateY(-10px)")}
+              >
                 <NavCamIcon />
               </button>
               <NavBtn item={v.navShop} label="รายการซื้อ"><NavShopIcon /></NavBtn>
