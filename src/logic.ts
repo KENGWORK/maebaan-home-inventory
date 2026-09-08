@@ -1,7 +1,7 @@
 // Pure domain logic ported from design/Home Inventory.dc.html.
 // Everything here is side-effect free so it can be unit tested and reused by the UI.
 
-import { HIST, ITEMS, LOCS, nowStamp, TODAY, TODAY_ISO } from "./data.js";
+import { HIST, ITEMS, LOCS, nowStamp, todayDate, todayISO } from "./data.js";
 import type { Hist, Item, Loc } from "./data.js";
 
 /** Next free item id: max existing + 1 (deterministic, unlike Date.now()). */
@@ -10,7 +10,7 @@ const nextId = (items: Item[]): number => Math.max(0, ...items.map((i) => i.id))
 export const DAY_MS = 86_400_000;
 
 /** Whole days from `today` until the EXP date (negative = already expired). */
-export function days(exp: string | null | undefined, today: Date = TODAY): number | null {
+export function days(exp: string | null | undefined, today: Date = todayDate()): number | null {
   if (!exp) return null;
   return Math.round((new Date(`${exp}T09:00:00`).getTime() - today.getTime()) / DAY_MS);
 }
@@ -117,7 +117,7 @@ export interface HomeDerived {
   ready: number;
 }
 
-export function homeDerived(items: Item[], today: Date = TODAY): HomeDerived {
+export function homeDerived(items: Item[], today: Date = todayDate()): HomeDerived {
   const expiring = items.filter((i) => {
     const d = days(i.exp, today);
     return i.qty > 0 && d !== null && d <= 3;
@@ -154,11 +154,12 @@ export function applyAdd(
   hist: Hist[],
   addRows: AddRow[],
   owner: string,
-  today: Date = TODAY,
+  today: Date = todayDate(),
   photos: string[] = [],
 ): { items: Item[]; hist: Hist[]; added: number } | { error: string } {
   const rows = addRows.filter((r) => r.name.trim() && r.loc);
   if (!rows.length) return { error: "กรอกชื่อของและเลือกสถานที่ก่อนบันทึก" };
+  const stamp = todayISO();
   const nextItems = items.map((i) => ({ ...i }));
   const nextHist = hist.slice();
   let added = 0;
@@ -177,7 +178,7 @@ export function applyAdd(
     const ex = nextItems.find((i) => i.name === name && i.loc === r.loc);
     if (ex) {
       ex.qty += r.qty;
-      ex.date = TODAY_ISO;
+      ex.date = stamp;
       if (exp) ex.exp = exp;
       ex.photos = mergePhotos(ex.photos, photos);
     } else {
@@ -188,7 +189,7 @@ export function applyAdd(
         qty: r.qty,
         loc: r.loc,
         owner,
-        date: TODAY_ISO,
+        date: stamp,
         exp,
         min: 1,
         target: Math.max(2, r.qty),
@@ -221,13 +222,14 @@ export function applyMove(
   if (!rows.length) return { error: "เลือกของและสถานที่ใหม่ก่อนบันทึก" };
   const nextItems = items.map((i) => ({ ...i }));
   const nextHist = hist.slice();
+  const stamp = todayISO();
   rows.forEach((r) => {
     const src = nextItems.find((i) => i.id === r.itemId);
     if (!src) return;
     const qty = Math.min(r.qty, src.qty);
     const from = src.loc;
     src.qty -= qty;
-    src.date = TODAY_ISO;
+    src.date = stamp;
     const dst = nextItems.find((i) => i.name === src.name && i.loc === r.to);
     if (dst) {
       dst.qty += qty;
@@ -240,7 +242,7 @@ export function applyMove(
         qty,
         loc: r.to,
         owner,
-        date: TODAY_ISO,
+        date: stamp,
         exp: src.exp,
         min: src.min,
         target: src.target,
@@ -271,7 +273,7 @@ export function applyUse(
   const it = itemOf(items, useId);
   if (!it) return { error: "เลือกของที่จะใช้ก่อน" };
   const q = Math.min(useQty, it.qty);
-  const nextItems = items.map((i) => (i.id === it.id ? { ...i, qty: i.qty - q, date: TODAY_ISO } : i));
+  const nextItems = items.map((i) => (i.id === it.id ? { ...i, qty: i.qty - q, date: todayISO() } : i));
   const nextHist = hist.slice();
   nextHist.unshift({
     evt: "USE", name: it.name, qty: q, to: it.loc, who: owner, date: nowStamp(),

@@ -1,6 +1,7 @@
 // Seed data ported verbatim from design/Home Inventory.dc.html (<script type="text/x-dc">).
-// "Today" is pinned so the demo alerts / EXP maths stay stable.
 
+/** The design's pinned "today" — used ONLY by the unit tests so their EXP maths
+ *  stay deterministic. The running app tracks the real date via todayDate()/todayISO(). */
 export const TODAY = new Date("2026-09-06T09:00:00");
 
 export type Kind = "supply" | "food";
@@ -114,8 +115,6 @@ export const TONE: Record<string, Tone> = {
   mint: { f: "hue-rotate(112deg) saturate(.88)", label: "มินต์เย็น", sw: "linear-gradient(145deg,#4FC0A8,#2E8F86)" },
 };
 
-export const TODAY_ISO = "2026-09-06";
-
 // A `toLocaleString("sv-SE")` one-liner is only ISO-shaped when the runtime
 // actually ships the sv-SE locale — a small-ICU build silently falls back to
 // en-US and yields "9/7/2026, 2:23:45 PM". Build the string from
@@ -151,6 +150,13 @@ export const localDateISO = (daysAgo = 0) => {
   const p = parts(new Date(Date.now() - daysAgo * 86_400_000));
   return `${p.year}-${p.month}-${p.day}`;
 };
+
+/** Real current date "YYYY-MM-DD" (Asia/Bangkok) — the running app's "today". */
+export const todayISO = () => localDateISO(0);
+
+/** Real current date as a Date, anchored at 09:00 so whole-day EXP maths line up
+ *  with the `${exp}T09:00:00` parse in logic.ts (Bangkok has no DST). */
+export const todayDate = () => new Date(`${localDateISO(0)}T09:00:00`);
 
 export const SEED = {
   items: ITEMS.map((i) => ({ ...i })),

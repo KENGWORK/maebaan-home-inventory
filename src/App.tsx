@@ -7,7 +7,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import { localDateISO, PENDING, TODAY, TONE } from "./data";
+import { localDateISO, PENDING, TONE } from "./data";
 import type { Hist, Item, Kind, Loc } from "./data";
 import {
   autoCode,
@@ -709,7 +709,7 @@ function build(
   } = H;
   const items = s.items;
   const screen = s.screen;
-  const d = homeDerived(items, TODAY);
+  const d = homeDerived(items);
   const { expiring, out, low, totalQty, ready } = d;
   const shop = shopRows(items, s.bought);
 
@@ -723,7 +723,7 @@ function build(
     on: () => void;
   }[] = [];
   expiring.forEach((i) => {
-    const dd = days(i.exp, TODAY)!;
+    const dd = days(i.exp)!;
     alerts.push({
       tag: dd <= 1 ? "EXP 1 วัน" : `EXP ${dd} วัน`,
       pill: pill("#FFE6E6", "#C9524F"),
@@ -909,7 +909,7 @@ function build(
   const showLocs = (s.invMode === "all" || s.invMode === "loc") && !s.invLoc;
   const showItems = s.invMode === "all" || s.invMode === "item" || !!s.invLoc;
   const invItems = itemMatch.map((i) => {
-    const dd = days(i.exp, TODAY);
+    const dd = days(i.exp);
     return {
       key: i.id,
       name: i.name,

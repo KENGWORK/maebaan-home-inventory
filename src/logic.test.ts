@@ -115,6 +115,7 @@ describe("applyAdd", () => {
       freshHist(),
       [{ name: "โยเกิร์ต", kind: "food", qty: 2, loc: "KIT-01", expMode: "days", expVal: "7" }],
       "เก่ง",
+      TODAY, // pin "today" so the resolved EXP date is deterministic
     );
     if ("error" in res) throw new Error(res.error);
     const y = res.items.find((i) => i.name === "โยเกิร์ต")!;

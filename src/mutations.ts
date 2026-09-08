@@ -1,4 +1,4 @@
-import { TODAY_ISO } from "./data.js";
+import { todayISO } from "./data.js";
 import type { Hist, Item, Kind, Loc } from "./data.js";
 import { applyAdd, applyMove, applyUse } from "./logic.js";
 
@@ -74,7 +74,7 @@ export function applyMutation(snap: Snapshot, msg: Msg, owner: string): Mutation
         qty: 0,
         loc: "",
         owner,
-        date: TODAY_ISO,
+        date: todayISO(),
         exp: undefined,
         min: 1,
         target: 2,
