@@ -96,6 +96,25 @@
           transform: rotate(360deg);
         }
       }
+      @keyframes shopLeave {
+        to {
+          transform: translateY(30px) scale(0.9);
+          opacity: 0;
+        }
+      }
+      @keyframes shopDrop {
+        from {
+          transform: translateY(-52px) scale(0.94);
+          opacity: 0;
+        }
+        55% {
+          opacity: 0.7;
+        }
+        to {
+          transform: none;
+          opacity: 0.7;
+        }
+      }
     </style>
   </head>
   <body>

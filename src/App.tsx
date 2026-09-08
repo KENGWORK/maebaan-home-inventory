@@ -103,6 +103,10 @@ interface State {
   pending: typeof import("./data").PENDING;
   hist: Hist[];
   bought: string[];
+  /** shop item name playing its "sink away" exit in the out/low group */
+  buyLeaving: string | null;
+  /** shop item name playing its "drop in from above" entrance in the bought group */
+  buyArriving: string | null;
   toast: string;
   sheet: Sheet | null;
   /** photos captured on the camera screen, before an event type is chosen */
@@ -165,6 +169,8 @@ const initial = (): State => ({
   pending: PENDING.map((p) => ({ ...p, shots: p.shots.slice() })),
   hist: freshHist(),
   bought: [],
+  buyLeaving: null,
+  buyArriving: null,
   toast: "",
   sheet: null,
   camShots: [],
@@ -244,6 +250,32 @@ export function App() {
     set({ toast: t });
     clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => set({ toast: "" }), 2600);
+  };
+
+  // ── shop "bought" move-down animation ──────────────────────────────────────
+  // The item sinks away in its out/low group, then (after 240ms) drops into the
+  // bought group from above. Two staggered timers drive the two phases.
+  const buyTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const buyItem = (name: string) => {
+    buyTimers.current.forEach(clearTimeout);
+    buyTimers.current = [];
+    setS((p) => ({ ...p, sheet: null, buyLeaving: name, buyArriving: null }));
+    flash(`ติ๊ก “${name}” เป็นซื้อแล้ว`);
+    buyTimers.current.push(
+      setTimeout(() => {
+        setS((p) =>
+          p.bought.includes(name)
+            ? { ...p, buyLeaving: null }
+            : { ...p, bought: [...p.bought, name], buyLeaving: null, buyArriving: name },
+        );
+        buyTimers.current.push(
+          setTimeout(
+            () => setS((p) => (p.buyArriving === name ? { ...p, buyArriving: null } : p)),
+            520,
+          ),
+        );
+      }, 240),
+    );
   };
 
   /**
@@ -568,6 +600,7 @@ export function App() {
     onUseSave: useSave,
     openCamera,
     revoke,
+    buyItem,
   }), [s]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const h = v.head;
@@ -701,6 +734,7 @@ type Helpers = {
   onUseSave: () => void;
   openCamera: (target: "cam" | "draft") => void;
   revoke: (list: Shot[]) => void;
+  buyItem: (name: string) => void;
 };
 
 function build(
@@ -714,7 +748,7 @@ function build(
   const {
     set, flash, nav, dispatch,
     setItemFieldDebounced, renamePlaceDebounced, setPlaceCodeDebounced,
-    onAddSave, onMoveSave, onUseSave, openCamera, revoke,
+    onAddSave, onMoveSave, onUseSave, openCamera, revoke, buyItem,
   } = H;
   const items = s.items;
   const screen = s.screen;
@@ -998,10 +1032,12 @@ function build(
   const mk = (g: "out" | "low" | "bought") =>
     shop
       .filter((r) => r.group === g)
-      .map((r, idx) => {
+      .map((r) => {
         const isB = g === "bought";
         return {
-          key: `${g}-${idx}`,
+          // key by name (unique per shopRows) so a card keeps its identity when it
+          // moves between groups — lets the exit/enter animations play cleanly
+          key: r.name,
           name: r.name,
           code: r.code,
           tick: isB ? "✓" : "",
@@ -1017,7 +1053,13 @@ function build(
               : `เหลือ ${r.qty} · ขั้นต่ำ ${r.min}`,
           cardStyle:
             "display:flex;align-items:center;gap:13px;border-radius:22px;padding:14px 16px;background:#FBF6FE;box-shadow:8px 10px 22px rgba(120,95,175,.16),-5px -6px 14px #ffffff" +
-            (isB ? ";opacity:.7" : ""),
+            (isB ? ";opacity:.7" : "") +
+            (!isB && s.buyLeaving === r.name
+              ? ";animation:shopLeave .24s ease forwards;pointer-events:none"
+              : "") +
+            (isB && s.buyArriving === r.name
+              ? ";animation:shopDrop .46s cubic-bezier(.2,1.15,.45,1) both"
+              : ""),
           tickStyle:
             "width:34px;height:34px;flex:none;border:none;border-radius:12px;cursor:pointer;font:500 15px Mitr,sans-serif;color:#ffffff;background:" +
             (isB ? "linear-gradient(145deg,#5FC79E,#2E8F6B)" : "#F1ECFA") +
@@ -1315,10 +1357,7 @@ function build(
       {
         label: "ยืนยัน",
         style: PRIM,
-        on: () => {
-          set({ sheet: null, bought: [...s.bought, sheet.name] });
-          flash(`ติ๊ก “${sheet.name}” เป็นซื้อแล้ว`);
-        },
+        on: () => buyItem(sheet.name),
       },
       { label: "ยกเลิก", style: SEC, on: () => set({ sheet: null }) },
     ];
