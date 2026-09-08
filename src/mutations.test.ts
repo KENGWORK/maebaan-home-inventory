@@ -136,6 +136,17 @@ describe("applyMutation", () => {
       .toEqual({ error: expect.any(String) });
   });
 
+  it("setPlacePhoto: sets and clears a location photo; unknown code -> { error }", () => {
+    const set = applyMutation(snap(), { type: "setPlacePhoto", code: "KIT-01", photo: "drivefileid" }, "เก่ง");
+    if ("error" in set) throw new Error(set.error);
+    expect(set.snapshot.locations.find((l) => l.code === "KIT-01")!.photo).toBe("drivefileid");
+    const clear = applyMutation(set.snapshot, { type: "setPlacePhoto", code: "KIT-01", photo: null }, "เก่ง");
+    if ("error" in clear) throw new Error(clear.error);
+    expect(clear.snapshot.locations.find((l) => l.code === "KIT-01")!.photo).toBeUndefined();
+    expect(applyMutation(snap(), { type: "setPlacePhoto", code: "NOPE-99", photo: "x" }, "เก่ง"))
+      .toEqual({ error: expect.any(String) });
+  });
+
   it("delPlace: rejects while items with qty>0 remain, else removes", () => {
     const s = snap();
     const busy = applyMutation(s, { type: "delPlace", code: "BAT-01" }, "เก่ง");

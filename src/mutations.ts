@@ -27,6 +27,7 @@ export type Msg =
   | { type: "newPlace"; code: string; name: string; room: string }
   | { type: "renamePlace"; code: string; name?: string; room?: string }
   | { type: "setPlaceCode"; code: string; newCode: string }
+  | { type: "setPlacePhoto"; code: string; photo: string | null }
   | { type: "delPlace"; code: string };
 
 export type MutationResult =
@@ -136,6 +137,13 @@ export function applyMutation(snap: Snapshot, msg: Msg, owner: string): Mutation
       );
       const nextItems = items.map((i) => (i.loc === msg.code ? { ...i, loc: newCode } : i));
       return { snapshot: { items: nextItems, locations: nextLocs, history }, result: {} };
+    }
+    case "setPlacePhoto": {
+      if (!locations.some((l) => l.code === msg.code)) return { error: "ไม่พบ location" };
+      const next = locations.map((l) =>
+        l.code === msg.code ? { ...l, photo: msg.photo ?? undefined } : l,
+      );
+      return { snapshot: { items, locations: next, history }, result: {} };
     }
     case "delPlace": {
       if (items.some((i) => i.loc === msg.code && i.qty > 0))

@@ -5,7 +5,7 @@ import { runMutation } from "./_run.js";
 
 const TYPES: Msg["type"][] = [
   "add", "move", "use", "newItem", "delItem", "setItemField",
-  "newPlace", "renamePlace", "setPlaceCode", "delPlace",
+  "newPlace", "renamePlace", "setPlaceCode", "setPlacePhoto", "delPlace",
 ];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

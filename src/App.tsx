@@ -229,15 +229,37 @@ export function App() {
   // One hidden <input capture> shared by every "take a photo" button; a ref says
   // whether the resulting files go to the camera screen or the current draft.
   const fileInput = useRef<HTMLInputElement>(null);
-  const captureTarget = useRef<"cam" | "draft">("cam");
+  const captureTarget = useRef<"cam" | "draft" | "place">("cam");
+  const placeCode = useRef<string>("");
   const openCamera = (target: "cam" | "draft") => {
     captureTarget.current = target;
+    fileInput.current?.click();
+  };
+  const openPlacePhoto = (code: string) => {
+    captureTarget.current = "place";
+    placeCode.current = code;
     fileInput.current?.click();
   };
   const onCapture = (e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []).filter((f) => f.type.startsWith("image/"));
     e.target.value = ""; // allow re-selecting the same file
     if (!files.length) return;
+    if (captureTarget.current === "place") {
+      const code = placeCode.current;
+      captureTarget.current = "cam";
+      if (!hydratedRef.current) return flash("โหมดตัวอย่าง — เพิ่มรูปไม่ได้");
+      setS((p) => ({ ...p, uploading: true }));
+      uploadPhoto(files[0])
+        .then((id) => {
+          setS((p) => ({ ...p, uploading: false }));
+          dispatch({ type: "setPlacePhoto", code, photo: id }, () => "เพิ่มรูปสถานที่แล้ว");
+        })
+        .catch((err) => {
+          setS((p) => ({ ...p, uploading: false }));
+          flash(`อัปโหลดรูปไม่สำเร็จ · ${(err as Error).message}`);
+        });
+      return;
+    }
     const shots: Shot[] = files.map((file) => ({ file, local: URL.createObjectURL(file) }));
     if (captureTarget.current === "cam") setS((p) => ({ ...p, camShots: [...p.camShots, ...shots] }));
     else setS((p) => ({ ...p, draftPhotos: [...p.draftPhotos, ...shots] }));
@@ -599,6 +621,7 @@ export function App() {
     onMoveSave: moveSave,
     onUseSave: useSave,
     openCamera,
+    openPlacePhoto,
     revoke,
     buyItem,
   }), [s]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -733,6 +756,7 @@ type Helpers = {
   onMoveSave: () => void;
   onUseSave: () => void;
   openCamera: (target: "cam" | "draft") => void;
+  openPlacePhoto: (code: string) => void;
   revoke: (list: Shot[]) => void;
   buyItem: (name: string) => void;
 };
@@ -748,7 +772,7 @@ function build(
   const {
     set, flash, nav, dispatch,
     setItemFieldDebounced, renamePlaceDebounced, setPlaceCodeDebounced,
-    onAddSave, onMoveSave, onUseSave, openCamera, revoke, buyItem,
+    onAddSave, onMoveSave, onUseSave, openCamera, openPlacePhoto, revoke, buyItem,
   } = H;
   const items = s.items;
   const screen = s.screen;
@@ -1131,6 +1155,16 @@ function build(
         name: l.name,
         room: l.room,
         itemCount: `${items.filter((i) => i.loc === l.code).length} items`,
+        photo: l.photo ? idSrc(l.photo) : "",
+        addPhoto: () => openPlacePhoto(l.code),
+        viewPhoto: l.photo
+          ? () =>
+              set({
+                viewer: { shots: [idSrc(l.photo as string)], idx: 0, src: `${l.code} · ${l.name}` },
+              })
+          : undefined,
+        removePhoto: () =>
+          dispatch({ type: "setPlacePhoto", code: l.code, photo: null }, () => "ลบรูปสถานที่แล้ว"),
         setCode: (e: ChangeEvent<HTMLInputElement>) =>
           setPlaceCodeDebounced(l.code, e.target.value.toUpperCase()),
         setName: (e: ChangeEvent<HTMLInputElement>) =>
@@ -2262,6 +2296,30 @@ function SetScreen({ v }: { v: V }) {
                 </div>
                 <div style={st("display:flex;align-items:center;gap:10px;margin-top:10px")}>
                   <input value={p.room} onChange={p.setRoom} placeholder="ห้อง" style={st("flex:1;min-width:0;border:none;border-radius:14px;padding:11px 13px;font:400 13px 'IBM Plex Sans Thai',sans-serif;color:#5B5375;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.16),inset -2px -2px 7px #ffffff")} />
+                  {p.photo ? (
+                    <div
+                      onClick={p.viewPhoto}
+                      style={st("position:relative;flex:none;width:40px;height:40px;border-radius:12px;overflow:hidden;cursor:zoom-in;box-shadow:inset 2px 3px 7px rgba(90,68,150,.18)")}
+                    >
+                      <img src={p.photo} alt="" loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          p.removePhoto();
+                        }}
+                        style={st("position:absolute;right:1px;top:1px;width:16px;height:16px;border:none;border-radius:6px;cursor:pointer;background:rgba(58,46,92,.82);color:#fff;font:500 10px Mitr,sans-serif;display:grid;place-items:center")}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={p.addPhoto}
+                      style={st("flex:none;width:40px;height:40px;border:none;border-radius:12px;cursor:pointer;background:#F1ECFA;box-shadow:inset 3px 4px 9px rgba(120,95,175,.18),inset -2px -2px 7px #ffffff;color:#6A57D6;font:500 18px Mitr,sans-serif;display:grid;place-items:center")}
+                    >
+                      +
+                    </button>
+                  )}
                   <div style={st("font:400 10.5px 'IBM Plex Mono',monospace;color:#9A90BC")}>{p.itemCount}</div>
                 </div>
               </div>

@@ -4,7 +4,7 @@ import { SEED } from "../src/data.js";
 import type { Snapshot } from "../src/mutations.js";
 
 export const ITEM_COLS = ["id","name","kind","qty","loc","owner","date","exp","min","target","noStock","photos"] as const;
-export const LOC_COLS = ["code","name","room"] as const;
+export const LOC_COLS = ["code","name","room","photo"] as const;
 export const HIST_COLS = ["ts","evt","name","qty","from","to","who","photos"] as const;
 
 const cell = (v: unknown) => (v === undefined || v === null ? "" : String(v));
@@ -44,13 +44,14 @@ export function rowsToItems(rows: string[][]): Item[] {
 }
 
 export function locsToRows(locs: Loc[]): string[][] {
-  return [[...LOC_COLS], ...locs.map((l) => [l.code, l.name, l.room])];
+  return [[...LOC_COLS], ...locs.map((l) => [l.code, l.name, l.room, l.photo ?? ""])];
 }
 
 export function rowsToLocs(rows: string[][]): Loc[] {
   return rows.slice(1).filter((r) => r[0]).map((r) => ({
     code: r[0], name: r[1] ?? "", room: r[2] ?? "",
     label: `${r[0]} · ${r[2] ?? ""} – ${r[1] ?? ""}`,
+    photo: r[3] || undefined,
   }));
 }
 
@@ -172,7 +173,7 @@ export async function writeSnapshot(
   await c.clearRange(`items!A${itemRows.length + 1}:L`);
   const locRows = locsToRows(next.locations);
   await c.updateRange("locations!A1", locRows);
-  await c.clearRange(`locations!A${locRows.length + 1}:C`);
+  await c.clearRange(`locations!A${locRows.length + 1}:D`);
   if (appendHistory.length) await c.append("history!A1", historyToRows(appendHistory));
 }
 

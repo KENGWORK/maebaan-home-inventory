@@ -13,6 +13,8 @@ export interface Loc {
   name: string;
   room: string;
   label: string;
+  /** Google Drive file id of the location's photo */
+  photo?: string;
 }
 
 export interface Item {
